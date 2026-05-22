@@ -1,0 +1,726 @@
+---
+title: "Primer Avance Proyecto Final - Cancer Data"
+author: "Julian Cabrera, Andres Carvajal, Mauricio Sanchez, Jaider Carvajal, Nelson Posso"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Propósito del Trabajo
+
+(Escribe aquí el propósito del análisis, destacando la búsqueda de patrones para diferenciar diagnósticos benignos y malignos).
+
+# 1. Dataset
+
+```{r preparacion}
+# Instalación y carga automática de paquetes faltantes
+paquetes <- c("tidyverse", "corrplot", "GGally", "MASS", "gridExtra", "plotly", "htmltools", "scales")
+paquetes_faltantes <- paquetes[!(paquetes %in% installed.packages()[,"Package"])]
+if(length(paquetes_faltantes)) {
+  install.packages(paquetes_faltantes, repos = "http://cran.us.r-project.org")
+}
+
+library(tidyverse)
+library(corrplot)
+library(GGally)
+library(MASS)
+library(gridExtra)
+library(plotly)
+library(htmltools)
+library(scales)
+
+# Lectura de los datos
+data <- read_csv('Cancer_Data.csv', show_col_types = FALSE)
+
+# Arreglar los nombres de columnas para que los espacios sean reemplazados por puntos automáticamente
+names(data) <- make.names(names(data))
+
+head(data, 5)
+```
+
+## Descripción del conjunto de datos
+(Escribe aquí la fuente del dataset, número de registros y descripción general)
+
+## Tipo de variables
+(Describe brevemente las variables numéricas y categóricas presentes)
+
+## Justificación
+(Explica por qué este dataset es apropiado para un análisis multivariado)
+
+# 2. Limpieza de datos
+
+```{r limpieza}
+# 1. Eliminar columnas residuales (como X que se crea al importar si hay coma al final)
+data_clean <- data %>%
+  dplyr::select(where(~!all(is.na(.))))
+
+# 2. Corrección de tipos de datos
+data_clean$diagnosis <- as.factor(data_clean$diagnosis)
+
+# 3. Valores nulos
+sum_na <- colSums(is.na(data_clean))
+sum_na[sum_na > 0] # Mostrar solo si existen columnas con NA
+
+# 4. Eliminación de duplicados
+data_clean <- data_clean %>% distinct()
+
+# 5. Filtrar solo variables de la media (mean)
+data_clean <- data_clean %>% dplyr::select(diagnosis, ends_with("_mean"))
+
+# Dataset puramente numérico
+data_num <- data_clean %>% dplyr::select(where(is.numeric))
+```
+
+### Interpretación
+(Redacta aquí qué encontraste en la limpieza, si había nulos o duplicados y qué acciones tomaste)
+
+
+# 3. Análisis univariado
+
+## Medidas descriptivas
+
+```{r descriptivas}
+# Media, Mediana y Desviación estándar
+medidas_resumen <- data.frame(
+  Media = apply(data_num, 2, mean),
+  Mediana = apply(data_num, 2, median),
+  Desviacion = apply(data_num, 2, sd)
+)
+
+head(medidas_resumen, 10)
+```
+
+### Análisis Individual por Variable
+
+A petición, graficaremos cada variable *de forma individual* para facilitar su lectura y análisis detallado.
+
+```{r func_plot, echo=FALSE}
+# Función de ayuda para no repetir todo el bloque de código de ggplot 30 veces
+generar_graficos_variable <- function(var_name) {
+  p1 <- ggplot(data_clean, aes_string(x = var_name)) +
+    geom_histogram(bins = 30, fill = "steelblue", color = "black", alpha = 0.7) +
+    labs(title = paste("Histograma de", var_name), x = var_name, y = "Frecuencia") +
+    theme_minimal()
+  
+  p2 <- ggplot(data_clean, aes_string(x = "diagnosis", y = var_name, fill = "diagnosis")) +
+    geom_boxplot(alpha = 0.7, outlier.colour = "black") +
+    scale_fill_manual(values = c("B" = "lightgreen", "M" = "salmon")) +
+    labs(title = paste("Boxplot de", var_name), x = "Diagnóstico", y = var_name) +
+    theme_minimal() +
+    theme(legend.position = "none")
+  
+  grid.arrange(p1, p2, ncol = 2)
+}
+```
+
+#### Variables de Media (Mean)
+
+**Dimensión de Tamaño: radius_mean, perimeter_mean y area_mean**
+
+*Nota: Dado que el radio, el perímetro y el área representan la misma característica estructural del tumor y están altamente correlacionadas (colinealidad), se analizan aquí como una única métrica conjunta representándola a través del radio.*
+
+```{r, fig.width=10, fig.height=4, echo=FALSE}
+generar_graficos_variable("radius_mean")
+```
+> **Interpretación de Tamaño:** (Escribe aquí tu análisis sobre la distribución del tamaño del tumor -representado por el radio- y cómo diferencia los grupos. Analizar esta variable representa a area_mean y perimeter_mean).
+
+**Variable: texture_mean**
+```{r, fig.width=10, fig.height=4, echo=FALSE}
+generar_graficos_variable("texture_mean")
+```
+> **Interpretación:** (Escribe aquí tu análisis)
+
+**Variable: smoothness_mean**
+```{r, fig.width=10, fig.height=4, echo=FALSE}
+generar_graficos_variable("smoothness_mean")
+```
+> **Interpretación:** (Escribe aquí tu análisis)
+
+**Variable: compactness_mean**
+```{r, fig.width=10, fig.height=4, echo=FALSE}
+generar_graficos_variable("compactness_mean")
+```
+> **Interpretación:** (Escribe aquí tu análisis)
+
+**Variable: concavity_mean**
+```{r, fig.width=10, fig.height=4, echo=FALSE}
+generar_graficos_variable("concavity_mean")
+```
+> **Interpretación:** (Escribe aquí tu análisis)
+
+**Variable: concave.points_mean**
+```{r, fig.width=10, fig.height=4, echo=FALSE}
+generar_graficos_variable("concave.points_mean")
+```
+> **Interpretación:** (Escribe aquí tu análisis)
+
+**Variable: symmetry_mean**
+```{r, fig.width=10, fig.height=4, echo=FALSE}
+generar_graficos_variable("symmetry_mean")
+```
+> **Interpretación:** (Escribe aquí tu análisis)
+
+**Variable: fractal_dimension_mean**
+```{r, fig.width=10, fig.height=4, echo=FALSE}
+generar_graficos_variable("fractal_dimension_mean")
+```
+> **Interpretación:** (Escribe aquí tu análisis)
+
+
+
+# 4. Análisis bivariado
+
+## Matriz de correlación visual
+
+Para observar relaciones bivariadas de todo el esqueleto, la matriz de correlación es la mejor visualización:
+
+```{r correlacion_visual, fig.width=10, fig.height=10}
+# Para evitar redundancia, aplicamos el concepto de dimensión única al Tamaño, 
+# dejando "area_mean" y retirando "radius_mean" y "perimeter_mean"
+data_num_reducido <- data_num %>% dplyr::select(-radius_mean, -perimeter_mean)
+mat_cor <- cor(data_num_reducido)
+
+corrplot(
+  mat_cor,
+  method = "color",
+  type = "upper",
+  addCoef.col = NULL, 
+  tl.col = "black",
+  tl.srt = 45,
+  tl.cex = 0.7,
+  title = "Matriz de correlación agrupada",
+  mar = c(0, 0, 1, 0)
+)
+```
+
+### Interpretación de la Matriz de Correlación
+(Escribe aquí las relaciones lineales encontradas y qué variables son redundantes)
+
+
+## Matriz de Scatterplots
+
+A continuación observamos las relaciones bivariadas combinadas, lo cual es de fácil visibilidad dado que hemos reducido nuestro dataset solo a los valores de medias.
+
+### Scatterplots: Variables *_mean*
+
+```{r ggpairs_mean, fig.width=14, fig.height=14, message=FALSE, warning=FALSE}
+vars_mean <- grep("_mean$", names(data_clean), value = TRUE)
+# Dejamos solo area_mean como representante del subgrupo de tamaño
+vars_mean_reducido <- setdiff(vars_mean, c("radius_mean", "perimeter_mean"))
+
+ggpairs(data_clean, columns = vars_mean_reducido, 
+        mapping = aes(color = diagnosis, alpha = 0.6), 
+        progress = FALSE) + 
+  theme_minimal()
+```
+
+> **Interpretación variables _mean:**
+(Interpreta las asociaciones, dependencias y solapamientos de este grupo aquí. Haz énfasis en la alta redundancia y correlación de las dimensiones de tamaño vistas como un solo fenómeno).
+
+
+# 5. Primeros hallazgos
+
+(Escribe aquí:
+- Identificación de patrones iniciales en los datos basándote en los subgrupos anteriores.
+- Qué variables consideras más relevantes para distinguir Benigno de Maligno.)
+
+
+# 6. Análisis multivariado básico
+
+## Coordenadas paralelas
+
+Para evaluar cómo un registro de tumor M o B viaja a lo largo de todo su perfil multivariado, es necesario estandarizarlas juntas.
+
+```{r coord_paralela_ggally, fig.width=14, fig.height=6}
+ggparcoord(
+  data_clean,
+  columns = 2:ncol(data_clean),
+  groupColumn = "diagnosis",
+  scale = "std",
+  alphaLines = 0.3
+) +
+  scale_color_manual(values = c("B" = "steelblue", "M" = "tomato")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(
+    title = "Coordenadas Paralelas (Datos Estandarizados Z)",
+    x = "Variable",
+    y = "Puntuación Z"
+  )
+```
+
+### Interpretación
+(Escribe aquí argumentando:
+- ¿Qué variables se transitan juntas?
+- ¿Qué patrones globales se observan arriba o abajo de la media?
+- ¿Existen perfiles homogéneos para los tumores?)
+
+
+## Gráficos 3D Interactivos
+
+Para observar el comportamiento en el espacio tridimensional y evidenciar la separabilidad de clases, generaremos gráficas para todas las combinaciones posibles de 3 variables (X, Y y Z) entre las variables resultantes.
+
+```{r interactivo_3d, message=FALSE, warning=FALSE}
+# Para evitar que el navegador colapse por dibujar 56 gráficas 3D separadas 
+# (excediendo el límite WebGL de las páginas web), construimos 1 SOLA gráfica interactiva
+# con un MENÚ DESPLEGABLE que contiene las 56 combinaciones.
+
+vars_combinar <- c("area_mean", "texture_mean", "smoothness_mean", "compactness_mean", "symmetry_mean", "concavity_mean", "concave.points_mean", "fractal_dimension_mean")
+combinaciones_3d <- combn(vars_combinar, 3, simplify = FALSE)
+
+# 1. Separar datos por diagnóstico para manejar las 2 trazas (clases)
+data_B <- data_clean %>% filter(diagnosis == "B")
+data_M <- data_clean %>% filter(diagnosis == "M")
+
+# Variables iniciales (por defecto arranca en la combinación 1)
+v_x_ini <- combinaciones_3d[[1]][1]
+v_y_ini <- combinaciones_3d[[1]][2]
+v_z_ini <- combinaciones_3d[[1]][3]
+
+# 2. Inicializar la gráfica 3D base con las 2 trazas separadas
+p <- plot_ly() %>%
+  add_trace(x = data_B[[v_x_ini]], y = data_B[[v_y_ini]], z = data_B[[v_z_ini]], 
+            type = "scatter3d", mode = "markers", name = "Benigno (B)",
+            marker = list(color = "steelblue", size = 4, opacity = 0.7)) %>%
+  add_trace(x = data_M[[v_x_ini]], y = data_M[[v_y_ini]], z = data_M[[v_z_ini]], 
+            type = "scatter3d", mode = "markers", name = "Maligno (M)",
+            marker = list(color = "tomato", size = 4, opacity = 0.7))
+
+# 3. Crear los botones del menú, uno por cada combinación
+botones <- lapply(combinaciones_3d, function(vars) {
+  x_v <- vars[1]
+  y_v <- vars[2]
+  z_v <- vars[3]
+  
+  # Nombre limpio para el menú desplegable (quitamos '_mean' para ahorrar espacio visual)
+  label_limpio <- paste(gsub("_mean", "", x_v), 
+                        gsub("_mean", "", y_v), 
+                        gsub("_mean", "", z_v), sep = ", ")
+  
+  list(
+    method = "update",
+    args = list(
+      # Actualizar 'x', 'y', 'z' suministrando una lista con la data de ambas trazas
+      list(
+        x = list(data_B[[x_v]], data_M[[x_v]]),
+        y = list(data_B[[y_v]], data_M[[y_v]]),
+        z = list(data_B[[z_v]], data_M[[z_v]])
+      ),
+      # Layout a actualizar (Ejes y título)
+      list(
+        title = paste("Comparando:", x_v, "vs", y_v, "vs", z_v),
+        scene = list(
+          xaxis = list(title = x_v),
+          yaxis = list(title = y_v),
+          zaxis = list(title = z_v)
+        )
+      )
+    ),
+    label = label_limpio
+  )
+})
+
+# 4. Añadir el menú desplegable al layout
+p <- p %>% layout(
+  title = paste("Comparando:", v_x_ini, "vs", v_y_ini, "vs", v_z_ini),
+  scene = list(
+    xaxis = list(title = v_x_ini),
+    yaxis = list(title = v_y_ini),
+    zaxis = list(title = v_z_ini)
+  ),
+  updatemenus = list(
+    list(
+      type = "dropdown",
+      active = 0,
+      buttons = botones,
+      x = 0,
+      xanchor = "left",
+      y = 1.15,
+      yanchor = "top",
+      bgcolor = "white",
+      pad = list(t = 10)
+    )
+  ),
+  margin = list(l = 0, r = 0, b = 0, t = 80)
+)
+
+# Renderizar en el documento como un solo widget interactivo
+p
+```
+
+> **Interpretación Gráficas 3D:**
+(Interpreta cómo la adición de una tercera dimensión altera tu comprensión de los datos. Señala qué variable evaluada en el eje Z proporciona la separación de clústeres más notoria al combinarse con Área y Textura.)
+
+
+# 7. Medidas descriptivas multivariantes gráficas
+
+Ya no queremos simplemente los números crudos, queremos darles contexto visual:
+
+## Localización: Media vectorial en Barplot
+
+Representaremos las "medias" de nuestras variables. Dado que las escalas originales pueden variar, usamos una **escala logarítmica (Log10)** para que la magnitud sea visualmente comparable en este resumen multivariante de localización.
+
+```{r media_vector}
+media_vectorial <- colMeans(data_num)
+
+df_media <- data.frame(
+  Variable = names(media_vectorial),
+  Media = media_vectorial
+)
+
+ggplot(df_media, aes(x = reorder(Variable, Media), y = Media)) +
+  geom_col(fill = "dodgerblue", alpha = 0.8) +
+  coord_flip() +
+  scale_y_log10() + 
+  theme_minimal() +
+  labs(
+    title = "Media Vectorial (Localización)", 
+    subtitle = "Expresado en escala logarítmica",
+    x = "Variable Métrica", 
+    y = "Media (Log10)"
+  )
+```
+
+## Dispersión: Heatmap de Matriz de Covarianza
+
+Una representación visual de la dispersión conjunta. Usamos la magnitud absoluta de la covarianza en escala Log10, que es lo más adecuado cuando se comparan covarianzas crudas que explotan a números altísimos.
+
+```{r covarianza_heatmap, fig.width=10, fig.height=10}
+mat_cov <- cov(data_num)
+
+# Transformación larga
+cov_largo <- as.data.frame(as.table(mat_cov))
+colnames(cov_largo) <- c("Var1", "Var2", "Covarianza")
+
+ggplot(cov_largo, aes(x = Var1, y = Var2, fill = log10(abs(Covarianza) + 1e-5))) +
+  geom_tile(color = "white") +
+  scale_fill_viridis_c(option = "magma", name = "Log10(|Cov|)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(
+    title = "Mapa de Calor de Covarianzas (Dispersión Multivariante)",
+    x = "", y = ""
+  )
+```
+
+*Nota para dependencia: La dependencia (Correlación Multivariante) ya está graficada exahustivamente en la sección 4.*
+
+### Interpretación Multivariante
+(Responde las tres preguntas guía basándote en las gráficas superiores:
+- ¿Qué tan dispersos están los datos según el nivel de calor del mapa de covarianzas?
+- ¿Qué variables varían más? (Mira en la barra logarítmica y el contraste del heatmap)
+- ¿Cómo se relacionan entre sí a nivel matricial conjunto?)
+
+
+# 8. Análisis de Componentes Principales (PCA)
+
+Aplicando los conceptos estudiados, procedemos a normalizar los datos y realizar un Análisis de Componentes Principales para encontrar las direcciones de máxima varianza y reducir la dimensionalidad.
+
+## Intuición geométrica: la nube tiene una dirección natural
+
+Antes de realizar el PCA de todas las variables, tomemos dos variables que sabemos están correlacionadas (por ejemplo, `radius_mean` y `compactness_mean`) para visualizar cómo PCA encuentra la "dirección natural" de los datos dibujando sus autovectores directamente sobre la nube de puntos bidimensional.
+
+```{r pca_intuicion_geometrica, fig.width=8, fig.height=6}
+# Estandarizamos un par de variables para el ejemplo 2D
+df_2d <- as.data.frame(scale(data_num %>% dplyr::select(radius_mean, compactness_mean)))
+
+# Calculamos autovectores y autovalores
+centro_2d <- colMeans(df_2d)
+eig_2d <- eigen(cov(df_2d))
+
+# Creamos un dataframe para graficar las flechas
+vectores_2d <- data.frame(
+  x = centro_2d[1],
+  y = centro_2d[2],
+  xend = centro_2d[1] + eig_2d$vectors[1, ] * sqrt(eig_2d$values) * 2.5,
+  yend = centro_2d[2] + eig_2d$vectors[2, ] * sqrt(eig_2d$values) * 2.5,
+  Componente = c("PC1: máxima varianza", "PC2: varianza restante")
+)
+
+# Graficamos la nube, la elipse y los componentes
+g_ejes <- ggplot(df_2d, aes(radius_mean, compactness_mean)) +
+  geom_point(alpha = 0.40, size = 1.5, color = "gray50") +
+  stat_ellipse(type = "norm", linewidth = 1.1, color = "steelblue") +
+  geom_segment(
+    data = vectores_2d,
+    aes(x = x, y = y, xend = xend, yend = yend),
+    inherit.aes = FALSE,
+    arrow = arrow(length = unit(0.25, "cm")),
+    linewidth = 1.3,
+    color = "tomato"
+  ) +
+  geom_point(aes(x = centro_2d[1], y = centro_2d[2]), size = 3, color = "tomato") +
+  coord_equal() +
+  labs(
+    title = "PCA como rotación de los ejes (Nube de datos 2D)",
+    subtitle = "PC1 se alinea con la elipse; PC2 captura la variabilidad restante",
+    x = "Radius Mean (Estandarizado)",
+    y = "Compactness Mean (Estandarizado)"
+  ) +
+  theme_minimal(base_size = 13)
+
+plotly::ggplotly(g_ejes)
+```
+Como se aprecia en la figura superior, los autovectores (las flechas rojas) descubren exactamente los ejes geométricos naturales de la nube de datos, confirmando el principio central del Análisis de Componentes Principales.
+
+## Estandarización (Normalización) de los datos
+
+Antes de aplicar PCA, es necesario estandarizar las variables numéricas, ya que están medidas en escalas muy distintas (por ejemplo, el área frente a la concavidad). Estandarizar significa transformar cada variable para que tenga media cero y desviación estándar uno.
+
+```{r estandarizacion_pca}
+# Normalización de los datos numéricos
+data_scaled <- as.data.frame(scale(data_num))
+
+# Verificamos que las medias son (cercanas a) cero y las desviaciones estándar son 1
+summary(data_scaled)
+```
+
+## PCA con `prcomp`
+
+Calculamos las componentes principales sobre los datos estandarizados.
+
+```{r pca_calculo}
+pca_cancer <- prcomp(data_num, center = TRUE, scale. = TRUE)
+summary(pca_cancer)
+```
+
+## Varianza Explicada y Scree Plot
+
+Analizamos cuánta varianza captura cada componente principal usando un Scree Plot, lo cual nos ayuda a decidir cuántas componentes conservar para reducir la dimensionalidad.
+
+```{r scree_plot_pca}
+var_pca <- (pca_cancer$sdev^2) / sum(pca_cancer$sdev^2)
+df_var_pca <- data.frame(
+  Componente = paste0("PC", seq_along(var_pca)),
+  Varianza = var_pca,
+  Acumulada = cumsum(var_pca)
+)
+
+# Ordenar niveles para el gráfico
+df_var_pca$Componente <- factor(df_var_pca$Componente, levels = df_var_pca$Componente)
+
+ggplot(df_var_pca, aes(Componente, Varianza)) +
+  geom_col(fill = "steelblue") +
+  geom_line(aes(y = Acumulada, group = 1), linewidth = 1.1, color = "tomato") +
+  geom_point(aes(y = Acumulada), size = 3, color = "tomato") +
+  scale_y_continuous(labels = percent_format()) +
+  labs(
+    title = "Scree plot y varianza acumulada (Cancer Data)",
+    subtitle = "Las primeras componentes concentran la mayor parte de la información",
+    x = "Componente principal",
+    y = "Proporción de varianza"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## Visualización de Scores (PC1 vs PC2)
+
+Proyectamos los datos en las dos primeras componentes principales.
+
+```{r scores_pca}
+scores_cancer <- as.data.frame(pca_cancer$x)
+scores_cancer$diagnosis <- data_clean$diagnosis
+
+g_scores_cancer <- ggplot(scores_cancer, aes(PC1, PC2, color = diagnosis)) +
+  geom_point(size = 2.5, alpha = 0.7) +
+  scale_color_manual(values = c("B" = "steelblue", "M" = "tomato")) +
+  labs(
+    title = "Tumores proyectados sobre las componentes principales",
+    subtitle = "Cada punto es un tumor; el color representa el diagnóstico",
+    x = paste0("PC1 (", round(df_var_pca$Varianza[1] * 100, 1), "%)"),
+    y = paste0("PC2 (", round(df_var_pca$Varianza[2] * 100, 1), "%)"),
+    color = "Diagnóstico"
+  ) +
+  theme_minimal(base_size = 13)
+
+plotly::ggplotly(g_scores_cancer)
+```
+Se observa cómo PCA encuentra una rotación de los datos que separa claramente los diagnósticos malignos de los benignos en su componente principal 1 (PC1).
+
+## Loadings: cómo interpretar las variables
+
+Los loadings indican cuánto contribuye cada variable original a cada componente. Valores positivos o negativos grandes indican que la variable tiene un peso importante en la componente.
+
+```{r loadings_pca}
+loadings_cancer <- as.data.frame(pca_cancer$rotation)
+loadings_cancer$Variable <- rownames(loadings_cancer)
+
+loadings_long_cancer <- loadings_cancer |>
+  tidyr::pivot_longer(cols = starts_with("PC"), names_to = "Componente", values_to = "Loading")
+
+ggplot(loadings_long_cancer |> filter(Componente %in% c("PC1", "PC2", "PC3", "PC4")),
+       aes(x = reorder(Variable, Loading), y = Loading, fill = Componente)) +
+  geom_col(position = "dodge") +
+  coord_flip() +
+  labs(
+    title = "Loadings de las dos primeras componentes (Cancer Data)",
+    subtitle = "Los loadings muestran cómo cada variable aporta a cada componente",
+    x = "Variable original",
+    y = "Loading"
+  ) +
+  theme_minimal(base_size = 13)
+```
+Este gráfico de barras ayuda a interpretar cada componente. La PC1 está fuertemente influenciada por variables de tamaño (radius, perimeter, area) y de forma (concavity, concave points), corroborando su importancia discriminante.
+
+## Biplot: Loadings y Scores combinados
+
+Visualizamos simultáneamente la posición de las observaciones (scores) y la dirección y peso de las variables originales (loadings).
+
+```{r biplot_pca, fig.width=10, fig.height=8}
+scores_2d_cancer <- scores_cancer[, c("PC1", "PC2", "diagnosis")]
+
+loadings_2d_cancer <- as.data.frame(pca_cancer$rotation[, 1:2])
+loadings_2d_cancer$Variable <- rownames(loadings_2d_cancer)
+
+factor_flechas_cancer <- 5
+
+ggplot(scores_2d_cancer, aes(PC1, PC2, color = diagnosis)) +
+  geom_point(size = 2, alpha = 0.4) +
+  scale_color_manual(values = c("B" = "steelblue", "M" = "tomato")) +
+  geom_segment(
+    data = loadings_2d_cancer,
+    aes(x = 0, y = 0, xend = PC1 * factor_flechas_cancer, yend = PC2 * factor_flechas_cancer),
+    inherit.aes = FALSE,
+    arrow = arrow(length = unit(0.25, "cm")),
+    linewidth = 1
+  ) +
+  geom_text(
+    data = loadings_2d_cancer,
+    aes(x = PC1 * factor_flechas_cancer * 1.1, y = PC2 * factor_flechas_cancer * 1.1, label = Variable),
+    inherit.aes = FALSE,
+    size = 4,
+    color = "black"
+  ) +
+  labs(
+    title = "Biplot PCA: observaciones y variables (Cancer Data)",
+    subtitle = "Puntos = tumores; flechas = variables originales proyectadas",
+    x = "PC1",
+    y = "PC2",
+    color = "Diagnóstico"
+  ) +
+  theme_minimal(base_size = 13)
+```
+En el biplot, notamos que las variables de tamaño y forma apuntan fuertemente en la dirección de PC1, coincidiendo con la zona de los tumores malignos.
+
+
+# 9. Interpretación global
+
+## Cálculos de soporte para la interpretación global
+
+```{r interpretacion_global_calculos}
+# 1) Correlaciones altas para evidenciar redundancia/colinealidad
+mat_cor_global <- cor(data_num)
+cor_df <- as.data.frame(as.table(mat_cor_global))
+colnames(cor_df) <- c("Var1", "Var2", "Cor")
+
+cor_altas <- cor_df %>%
+  filter(Var1 != Var2) %>%
+  mutate(par = paste(pmin(as.character(Var1), as.character(Var2)),
+                     pmax(as.character(Var1), as.character(Var2)), sep = "__")) %>%
+  distinct(par, .keep_all = TRUE) %>%
+  mutate(abs_cor = abs(Cor)) %>%
+  filter(abs_cor >= 0.75) %>%
+  arrange(desc(abs_cor))
+
+head(cor_altas, 10)
+
+# 2) Variables más discriminantes por tamaño de efecto (Cohen's d)
+cohens_d <- function(x, g) {
+  x1 <- x[g == "M"]
+  x0 <- x[g == "B"]
+  n1 <- length(x1)
+  n0 <- length(x0)
+  s1 <- sd(x1)
+  s0 <- sd(x0)
+  s_pooled <- sqrt(((n1 - 1) * s1^2 + (n0 - 1) * s0^2) / (n1 + n0 - 2))
+  (mean(x1) - mean(x0)) / s_pooled
+}
+
+efectos <- sapply(data_num, cohens_d, g = data_clean$diagnosis)
+tabla_efectos <- data.frame(
+  variable = names(efectos),
+  cohen_d = as.numeric(efectos),
+  abs_d = abs(as.numeric(efectos))
+) %>%
+  arrange(desc(abs_d))
+
+head(tabla_efectos, 10)
+
+# 3) Dominancia multivariante por PCA (sobre variables estandarizadas)
+pca_global <- prcomp(data_num, scale. = TRUE)
+var_exp <- (pca_global$sdev^2) / sum(pca_global$sdev^2)
+var_acum <- cumsum(var_exp)
+
+tabla_pca <- data.frame(
+  Componente = paste0("PC", seq_along(var_exp)),
+  Varianza = round(var_exp, 4),
+  Varianza_Acumulada = round(var_acum, 4)
+)
+
+head(tabla_pca, 5)
+
+# 4) Cargas absolutas en PC1 para identificar variables dominantes
+cargas_pc1 <- data.frame(
+  variable = rownames(pca_global$rotation),
+  loading_pc1 = pca_global$rotation[, 1],
+  abs_loading_pc1 = abs(pca_global$rotation[, 1])
+) %>%
+  arrange(desc(abs_loading_pc1))
+
+head(cargas_pc1, 10)
+```
+
+## ¿Qué patrones encontraron?
+
+Los patrones más claros del EDA son los siguientes:
+
+1. Existe una separación estructural entre tumores benignos (B) y malignos (M), visible en distribuciones y boxplots de variables de forma/tamaño.
+2. Hay colinealidad alta en el bloque de tamaño (radio, perímetro, área), y por eso modelar estas variables como una dimensión conjunta es metodológicamente correcto.
+3. El número de pares con correlación alta ($|r| \ge 0.75$) confirma redundancia informativa en varias variables *_mean*.
+4. En coordenadas paralelas, los tumores malignos tienden a perfiles simultáneamente altos en irregularidad (concavity, concave points, compactness) y tamaño.
+
+En términos prácticos, el dataset no es un conjunto de variables independientes: es un sistema multivariado con bloques de variables que se mueven juntas.
+
+## ¿Qué variables dominan el comportamiento?
+
+Con base en el ranking por tamaño de efecto (Cohen's d), las variables que más discriminan entre M y B son típicamente:
+
+1. `concave.points_mean`
+2. `concavity_mean`
+3. `radius_mean` / `perimeter_mean` / `area_mean` (misma dimensión de tamaño)
+4. `compactness_mean`
+
+Adicionalmente, el PCA muestra que:
+
+1. La primera componente concentra gran parte de la variabilidad global.
+2. Las mayores cargas absolutas en PC1 corresponden a variables de tamaño e irregularidad de borde.
+3. Esto confirma que el comportamiento del dataset está dominado por dos ejes clínicamente coherentes: tamaño tumoral e irregularidad morfológica.
+
+## ¿Qué conclusiones pueden obtener?
+
+1. El conjunto de variables *_mean* sí contiene señal discriminante fuerte para distinguir benigno vs maligno.
+2. La redundancia observada no es un problema, pero exige reducción de dimensionalidad o selección de variables para evitar sobreajuste.
+3. Desde el punto de vista clínico, mayor tamaño e irregularidad de contorno se asocian con mayor probabilidad de malignidad.
+4. Desde el punto de vista estadístico, este es un caso ideal para modelado supervisado con preprocesamiento (estandarización + control de colinealidad).
+
+## ¿Qué tipo de problema podría resolverse con estos datos?
+
+El problema principal es una **clasificación binaria supervisada**:
+
+1. Objetivo: predecir `diagnosis` (B vs M).
+2. Variables predictoras: bloque de características radiológicas *_mean*.
+3. Modelos adecuados: regresión logística, SVM, Random Forest, XGBoost.
+4. Métricas recomendadas: AUC, sensibilidad, especificidad, F1 y matriz de confusión.
+
+Como extensión, también se puede abordar un problema de **segmentación de perfiles tumorales** (clustering) para identificar subgrupos dentro de cada diagnóstico.
+
+## Cierre profesional
+
+En síntesis, el EDA demuestra que el dataset tiene estructura multivariada consistente, variables con alta capacidad discriminante y condiciones adecuadas para construir un clasificador clínicamente útil. El siguiente paso técnico natural es entrenar y validar modelos supervisados con validación cruzada, priorizando interpretabilidad y desempeño diagnóstico.
