@@ -1,0 +1,558 @@
+---
+title: "Clase Integradora Final"
+subtitle: "PCA vs MANOVA vs Análisis Factorial — Nivel Distrital"
+author: "Universidad Distrital Francisco José de Caldas"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: cosmo
+    code_folding: show
+    df_print: paged
+    fig_width: 9
+    fig_height: 5.8
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 9,
+  fig.height = 5.8
+)
+```
+
+```{r packages, include=FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(psych)
+library(scales)
+library(GGally)
+```
+
+# Introducción
+
+Durante el semestre se estudiaron múltiples herramientas del análisis multivariante: correlación, covarianza, distribución normal multivariante, distancia de Mahalanobis, PCA, MANOVA y análisis factorial. Cada técnica fue presentada como una herramienta específica con objetivos propios. Sin embargo, uno de los mayores problemas en el aprendizaje del análisis multivariante es que los estudiantes suelen ver estas técnicas como procedimientos separados y desconectados.
+
+El propósito de esta clase es integrar completamente el curso y comprender qué problema resuelve cada técnica, cómo se relacionan entre sí y cuándo conviene utilizar cada una. El objetivo ya no es aprender una nueva función en R, sino desarrollar criterio estadístico. En análisis multivariante, la pregunta correcta es más importante que el algoritmo. Una misma base de datos puede analizarse desde perspectivas distintas dependiendo del objetivo del estudio.
+
+# Objetivos de aprendizaje
+
+Al finalizar esta clase el estudiante estará en capacidad de:
+
+- Diferenciar PCA, MANOVA y análisis factorial.
+- Identificar qué pregunta estadística responde cada técnica.
+- Relacionar las técnicas con covarianza y correlación.
+- Aplicar múltiples técnicas sobre un mismo dataset.
+- Interpretar resultados multivariantes desde perspectivas distintas.
+- Comprender la relación entre reducción dimensional, inferencia y factores latentes.
+- Elegir correctamente una técnica multivariante según el problema.
+
+# Mapa conceptual del curso
+
+Todo el curso puede entenderse como una secuencia lógica:
+
+```text
+Correlación y covarianza
+            ↓
+Distribución normal multivariante
+            ↓
+Distancia de Mahalanobis
+            ↓
+PCA
+            ↓
+MANOVA
+            ↓
+Análisis factorial
+```
+
+Cada técnica surge como una extensión natural de la anterior. La covarianza y la correlación describen relaciones entre variables. La distribución normal multivariante y Mahalanobis introducen geometría estadística. PCA reduce dimensiones. MANOVA compara perfiles multivariantes. El análisis factorial intenta descubrir estructuras ocultas detrás de las correlaciones observadas.
+
+# Preguntas estadísticas fundamentales
+
+Cada técnica responde una pregunta distinta.
+
+| Técnica | Pregunta principal |
+|---|---|
+| PCA | ¿Cómo resumir variables? |
+| MANOVA | ¿Los grupos son diferentes? |
+| Análisis factorial | ¿Qué estructura latente existe? |
+
+Esta diferencia es fundamental. Muchas veces los estudiantes intentan usar una técnica para resolver un problema que corresponde a otra. El análisis multivariante no consiste en memorizar algoritmos, sino en seleccionar correctamente la herramienta según la pregunta.
+
+# Dataset de trabajo: USArrests
+
+Usaremos el dataset `USArrests`.
+
+Variables:
+
+- Murder
+- Assault
+- UrbanPop
+- Rape
+
+```{r cargar-dataset}
+data("USArrests")
+
+head(USArrests)
+```
+
+# Exploración inicial
+
+```{r estructura}
+str(USArrests)
+
+summary(USArrests)
+```
+
+# Correlación: la base del análisis multivariante
+
+La mayoría de técnicas multivariantes dependen de relaciones entre variables. Si las variables fueran completamente independientes, muchas técnicas perderían sentido.
+
+```{r correlacion}
+cor_US <- cor(USArrests)
+
+round(cor_US, 3)
+```
+
+# Visualización de correlaciones
+
+```{r heatmap}
+cor_larga <- as.data.frame(as.table(cor_US))
+
+ggplot(
+  cor_larga,
+  aes(
+    Var1,
+    Var2,
+    fill = Freq
+  )
+) +
+  geom_tile() +
+  scale_fill_gradient2(
+    low = "blue",
+    high = "red",
+    mid = "white",
+    midpoint = 0,
+    limits = c(-1,1)
+  ) +
+  labs(
+    title = "Matriz de correlación",
+    subtitle = "Relaciones lineales entre variables",
+    x = "",
+    y = "",
+    fill = "Correlación"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+Las correlaciones positivas indican variables que tienden a aumentar juntas. Las negativas indican relaciones inversas. Tanto PCA como análisis factorial utilizan esta estructura de correlación para construir nuevas dimensiones.
+
+# PCA — Reducción dimensional
+
+# Pregunta central del PCA
+
+\[
+\text{¿Cómo resumir muchas variables en pocas dimensiones?}
+\]
+
+PCA busca construir nuevas variables llamadas componentes principales que concentren la mayor cantidad posible de varianza.
+
+# Modelo PCA
+
+```{r pca}
+pca <- prcomp(
+  USArrests,
+  scale. = TRUE
+)
+
+summary(pca)
+```
+
+# Varianza explicada
+
+```{r var-explicada}
+var_exp <- (pca$sdev^2) / sum(pca$sdev^2)
+
+data.frame(
+  Componente = paste0("PC", 1:length(var_exp)),
+  Varianza = var_exp
+)
+```
+
+# Scree Plot
+
+```{r scree}
+plot(
+  var_exp,
+  type = "b",
+  pch = 19,
+  xlab = "Componente",
+  ylab = "Proporción de varianza",
+  main = "Scree Plot PCA"
+)
+```
+
+Los primeros componentes concentran gran parte de la información. PCA busca reducir dimensiones sin perder demasiada varianza.
+
+# Scores PCA
+
+```{r scores-pca}
+scores_pca <- as.data.frame(pca$x)
+
+scores_pca$Estado <- rownames(USArrests)
+
+head(scores_pca)
+```
+
+# Visualización PCA
+
+```{r plot-pca}
+ggplot(
+  scores_pca,
+  aes(
+    PC1,
+    PC2
+  )
+) +
+  geom_point(size = 3, alpha = 0.85) +
+  geom_text(
+    aes(label = Estado),
+    size = 3,
+    vjust = -0.5
+  ) +
+  labs(
+    title = "PCA sobre USArrests",
+    subtitle = "Reducción dimensional del dataset",
+    x = "PC1",
+    y = "PC2"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+# Interpretación del PCA
+
+PCA:
+
+- reduce dimensionalidad,
+- resume información,
+- facilita visualización,
+- transforma variables originales en componentes.
+
+Sin embargo:
+
+- no prueba hipótesis,
+- no descubre factores latentes,
+- no compara grupos formalmente.
+
+PCA es principalmente una herramienta descriptiva y geométrica.
+
+# MANOVA — Comparación de perfiles multivariantes
+
+# Pregunta central de MANOVA
+
+\[
+\text{¿Los grupos son diferentes considerando múltiples variables simultáneamente?}
+\]
+
+MANOVA requiere grupos. Para este ejemplo construiremos grupos artificiales usando la variable `Murder`.
+
+```{r grupos}
+USArrests$Grupo <- ifelse(
+  USArrests$Murder >
+    median(USArrests$Murder),
+  "Alta violencia",
+  "Baja violencia"
+)
+
+table(USArrests$Grupo)
+```
+
+# Visualización de grupos
+
+```{r boxplot-grupos}
+USArrests |>
+  ggplot(aes(Grupo, Murder, fill = Grupo)) +
+  geom_boxplot(alpha = 0.75) +
+  labs(
+    title = "Variable Murder por grupo",
+    subtitle = "Construcción artificial de grupos",
+    x = "Grupo",
+    y = "Murder"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+# Modelo MANOVA
+
+```{r manova}
+modelo_manova <- manova(
+  cbind(
+    Murder,
+    Assault,
+    UrbanPop,
+    Rape
+  ) ~ Grupo,
+  data = USArrests
+)
+
+summary(
+  modelo_manova,
+  test = "Wilks"
+)
+```
+
+# Interpretación de Wilks Lambda
+
+Wilks Lambda es uno de los estadísticos más usados en MANOVA.
+
+- valores cercanos a 1 → grupos similares,
+- valores pequeños → grupos diferentes.
+
+Si:
+
+\[
+p < 0.05
+\]
+
+se concluye que existen diferencias multivariantes entre grupos.
+
+# ANOVA posteriores
+
+```{r anova-posteriores}
+summary.aov(modelo_manova)
+```
+
+MANOVA responde la pregunta global multivariante. Los ANOVA posteriores ayudan a identificar qué variables contribuyen más a las diferencias entre grupos.
+
+# Interpretación de MANOVA
+
+MANOVA:
+
+- compara perfiles multivariantes,
+- trabaja con múltiples variables simultáneamente,
+- realiza inferencia estadística,
+- requiere grupos,
+- considera covarianza entre variables.
+
+A diferencia de PCA, MANOVA sí prueba hipótesis.
+
+# Análisis factorial — Factores latentes
+
+# Pregunta central del análisis factorial
+
+\[
+\text{¿Qué estructura latente explica las correlaciones?}
+\]
+
+El análisis factorial busca descubrir factores ocultos que explican las relaciones entre variables observadas.
+
+# Adecuación factorial
+
+## KMO
+
+```{r kmo}
+psych::KMO(cor_US)
+```
+
+## Bartlett
+
+```{r bartlett}
+psych::cortest.bartlett(cor_US, n = nrow(USArrests))
+```
+
+Estas pruebas ayudan a evaluar si la matriz de correlaciones es adecuada para análisis factorial.
+
+# Modelo factorial
+
+```{r factanal}
+modelo_fa <- factanal(
+  USArrests,
+  factors = 2,
+  rotation = "varimax"
+)
+
+modelo_fa
+```
+
+# Cargas factoriales
+
+```{r loadings}
+modelo_fa$loadings
+```
+
+Las cargas factoriales muestran qué variables se relacionan con cada factor.
+
+# Interpretación semántica
+
+Si variables como:
+
+- Murder,
+- Assault,
+- Rape
+
+cargan fuerte sobre un factor, ese factor podría interpretarse como:
+
+\[
+\text{Violencia}
+\]
+
+La interpretación depende del contexto del problema y de las variables asociadas con cada factor.
+
+# Unicidades
+
+```{r uniquenesses}
+modelo_fa$uniquenesses
+```
+
+La unicidad representa la parte de la varianza de cada variable que no es explicada por los factores comunes.
+
+# Scores factoriales
+
+```{r scores-factoriales}
+modelo_scores <- factanal(
+  USArrests,
+  factors = 2,
+  rotation = "varimax",
+  scores = "regression"
+)
+
+scores_df <- as.data.frame(modelo_scores$scores)
+
+scores_df$Estado <- rownames(USArrests)
+
+head(scores_df)
+```
+
+# Visualización de scores factoriales
+
+```{r plot-factorial}
+ggplot(
+  scores_df,
+  aes(
+    Factor1,
+    Factor2
+  )
+) +
+  geom_point(size = 3, alpha = 0.85) +
+  geom_text(
+    aes(label = Estado),
+    size = 3,
+    vjust = -0.5
+  ) +
+  labs(
+    title = "Scores factoriales",
+    subtitle = "Estados proyectados en factores latentes",
+    x = "Factor 1",
+    y = "Factor 2"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+# Interpretación del análisis factorial
+
+El análisis factorial:
+
+- intenta explicar correlaciones,
+- modela factores latentes,
+- separa varianza común y específica,
+- busca interpretación conceptual,
+- trabaja sobre estructura interna de variables.
+
+A diferencia de PCA, no busca únicamente reducir dimensión.
+
+# Comparación final entre técnicas
+
+| Aspecto | PCA | MANOVA | Factorial |
+|---|---|---|---|
+| Objetivo | Reducir dimensión | Comparar grupos | Descubrir factores |
+| Tipo de técnica | Descriptiva | Inferencial | Modelo latente |
+| Requiere grupos | No | Sí | No |
+| Usa correlaciones | Sí | Parcialmente | Sí |
+| Produce componentes | Sí | No | No |
+| Produce factores | No | No | Sí |
+| Prueba hipótesis | No | Sí | Parcialmente |
+| Busca interpretación semántica | Limitada | No necesariamente | Sí |
+
+# Relación conceptual entre técnicas
+
+PCA y análisis factorial parecen similares porque ambos generan nuevas dimensiones. Sin embargo, PCA busca resumir información, mientras que el análisis factorial busca explicar estructuras ocultas. MANOVA es distinto porque su objetivo principal es realizar inferencia estadística sobre grupos multivariantes.
+
+Estas técnicas no compiten entre sí. Se complementan. En muchos proyectos reales pueden utilizarse juntas.
+
+# Ejemplo integrado
+
+Supongamos un problema de criminalidad:
+
+- PCA → resumir variables de violencia.
+- MANOVA → comparar regiones del país.
+- Factorial → descubrir dimensiones ocultas de criminalidad.
+
+El dataset puede ser el mismo, pero la pregunta estadística cambia.
+
+# Actividad integradora
+
+## Parte 1: PCA
+
+1. Interpretar PC1 y PC2.
+2. Explicar varianza explicada.
+3. Interpretar el Scree Plot.
+
+## Parte 2: MANOVA
+
+1. Interpretar Wilks Lambda.
+2. Interpretar valor p.
+3. Explicar qué variables aportan más.
+
+## Parte 3: Factorial
+
+1. Interpretar cargas factoriales.
+2. Nombrar factores.
+3. Interpretar unicidades.
+
+## Parte 4: Elección de técnica
+
+Relacionar cada problema con la técnica adecuada:
+
+| Problema | Técnica |
+|---|---|
+| Resumir variables | ? |
+| Comparar grupos | ? |
+| Descubrir factores ocultos | ? |
+
+# Preguntas conceptuales
+
+1. ¿Qué problema resuelve PCA?
+2. ¿Qué problema resuelve MANOVA?
+3. ¿Qué problema resuelve análisis factorial?
+4. ¿Por qué PCA no prueba hipótesis?
+5. ¿Qué representa Wilks Lambda?
+6. ¿Qué representa una carga factorial?
+7. ¿Qué diferencia existe entre componente y factor?
+8. ¿Qué representa la unicidad?
+9. ¿Por qué PCA y análisis factorial no son equivalentes?
+10. ¿Qué técnica usarías para descubrir dimensiones psicológicas?
+
+# Conclusión
+
+El análisis multivariante no consiste en memorizar algoritmos. Consiste en comprender relaciones entre variables, interpretar estructuras multidimensionales y seleccionar correctamente herramientas estadísticas según el problema. PCA, MANOVA y análisis factorial son técnicas diferentes porque responden preguntas diferentes.
+
+PCA reduce dimensión y facilita visualización. MANOVA compara grupos considerando múltiples variables simultáneamente. El análisis factorial busca descubrir factores latentes que explican correlaciones observadas. Comprender estas diferencias permite desarrollar pensamiento estadístico real y aplicar análisis multivariante de manera coherente y fundamentada.
+
+# Cierre del curso
+
+Con esta clase se integra el núcleo clásico del análisis multivariante estudiado durante el semestre:
+
+- correlación y covarianza,
+- distribución normal multivariante,
+- Mahalanobis,
+- PCA,
+- MANOVA,
+- análisis factorial.
+
+La meta final del curso no es únicamente usar software estadístico, sino aprender a pensar estadísticamente en múltiples dimensiones.

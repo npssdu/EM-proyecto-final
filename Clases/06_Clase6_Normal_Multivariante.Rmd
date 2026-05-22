@@ -1,0 +1,750 @@
+---
+title: "Estadística Multidimensional: Distribución Normal Multivariante"
+subtitle: "Clase con intuición geométrica, fórmulas, simulaciones y visualizaciones en R"
+author: "Universidad Distrital Francisco José de Caldas"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: cosmo
+    df_print: paged
+    code_folding: hide
+    fig_width: 9
+    fig_height: 5.8
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 9,
+  fig.height = 5.8
+)
+```
+
+```{r packages, include=FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(MASS)
+library(plotly)
+library(mvtnorm)
+library(patchwork)
+library(scales)
+```
+
+# Buenos días
+
+Buenos días. En la clase anterior formalizamos los elementos fundamentales de las variables aleatorias multivariantes: distribución conjunta, distribuciones marginales, distribución condicional, independencia, esperanza vectorial, matriz de covarianza, correlación y ley de la varianza total. Ese recorrido fue necesario porque el análisis estadístico multidimensional no puede entenderse únicamente como una colección de gráficas o técnicas computacionales; necesita una base probabilística que explique por qué las variables se mueven juntas, cómo se distribuyen en el espacio y cómo se interpreta la dependencia entre dimensiones.
+
+En esta sesión avanzaremos hacia uno de los modelos más importantes de toda la estadística multivariante: la **distribución normal multivariante**. Esta distribución es central porque generaliza la campana normal tradicional a espacios de dos, tres o muchas dimensiones. En vez de describir una sola variable, modela simultáneamente un vector de variables y permite representar su centro, dispersión, orientación, dependencia y forma geométrica. Su comprensión es indispensable para temas posteriores del curso como inferencia multivariante, análisis de componentes principales, análisis factorial, clasificación, detección de atípicos y modelos gaussianos.
+
+# Objetivos de aprendizaje
+
+Al finalizar esta clase, el estudiante estará en capacidad de:
+
+- Definir formalmente la distribución normal multivariante.
+- Identificar el papel del vector de medias y la matriz de covarianza.
+- Interpretar geométricamente las curvas de nivel o contornos de densidad.
+- Diferenciar distancia euclídea y distancia de Mahalanobis.
+- Reconocer cómo la covarianza modifica la forma y orientación de la nube de datos.
+- Simular datos normales multivariantes en R y visualizar su estructura.
+- Conectar la normal multivariante con PCA, inferencia y análisis factorial.
+
+# 1. De la normal univariada a la normal multivariante
+
+La distribución normal univariada describe el comportamiento probabilístico de una sola variable continua. Si una variable aleatoria $X$ sigue una normal con media $\mu$ y varianza $\sigma^2$, se escribe:
+
+$$
+X \sim N(\mu, \sigma^2)
+$$
+
+Su densidad está dada por:
+
+$$
+f(x)=\frac{1}{\sqrt{2\pi\sigma^2}}
+\exp\left[-\frac{1}{2}\frac{(x-\mu)^2}{\sigma^2}\right]
+$$
+
+Esta expresión contiene dos elementos esenciales: la media $\mu$, que define el centro de la distribución, y la varianza $\sigma^2$, que determina su dispersión. En una dimensión, la forma visual de esta distribución es la conocida campana normal. Los valores cercanos a la media tienen mayor densidad y los valores muy alejados del centro tienen menor densidad. La distancia al centro se mide mediante el término $(x-\mu)^2/\sigma^2$, que estandariza el alejamiento teniendo en cuenta la variabilidad de la variable.
+
+Cuando pasamos al caso multivariante, la idea central permanece, pero la estructura matemática cambia. Ya no se modela una sola variable, sino un vector aleatorio $\mathbf{X}=(X_1,X_2,\dots,X_p)^T$. En ese caso, la media deja de ser un número y se convierte en un vector; la varianza deja de ser un único valor y se convierte en una matriz de covarianza. Esta transición es profunda: el modelo no sólo describe cuánto varía cada variable, sino también cómo varían conjuntamente. Por eso la normal multivariante debe entenderse como una distribución que organiza centro, escala, dependencia y geometría en un solo objeto probabilístico.
+
+# 2. Definición formal de la normal multivariante
+
+Sea $\mathbf{X}$ un vector aleatorio de dimensión $p$. Decimos que $\mathbf{X}$ sigue una distribución normal multivariante con vector de medias $\boldsymbol{\mu}$ y matriz de covarianza $\Sigma$ si:
+
+$$
+\mathbf{X} \sim N_p(\boldsymbol{\mu}, \Sigma)
+$$
+
+donde:
+
+$$
+\boldsymbol{\mu} =
+\begin{pmatrix}
+\mu_1 \\
+\mu_2 \\
+\vdots \\
+\mu_p
+\end{pmatrix}
+$$
+
+y
+
+$$
+\Sigma =
+\begin{pmatrix}
+\sigma_{11} & \sigma_{12} & \cdots & \sigma_{1p} \\
+\sigma_{21} & \sigma_{22} & \cdots & \sigma_{2p} \\
+\vdots & \vdots & \ddots & \vdots \\
+\sigma_{p1} & \sigma_{p2} & \cdots & \sigma_{pp}
+\end{pmatrix}
+$$
+
+La densidad de la normal multivariante es:
+
+$$
+f(\mathbf{x}) =
+\frac{1}{(2\pi)^{p/2}|\Sigma|^{1/2}}
+\exp\left[
+-\frac{1}{2}
+(\mathbf{x}-\boldsymbol{\mu})^T
+\Sigma^{-1}
+(\mathbf{x}-\boldsymbol{\mu})
+\right]
+$$
+
+Esta fórmula puede parecer compleja al inicio, pero su estructura es muy similar a la normal univariada. El término $(2\pi)^{p/2}$ ajusta la escala por la dimensión del espacio; $|\Sigma|^{1/2}$ controla el volumen o dispersión global de la distribución; y el término exponencial mide qué tan lejos está un punto $\mathbf{x}$ del centro $\boldsymbol{\mu}$ considerando la forma real de la nube de datos. La matriz inversa $\Sigma^{-1}$ es clave porque permite ponderar la distancia según la variabilidad y correlación de las variables.
+
+La parte más importante para interpretar la fórmula es el término cuadrático:
+
+$$
+(\mathbf{x}-\boldsymbol{\mu})^T\Sigma^{-1}(\mathbf{x}-\boldsymbol{\mu})
+$$
+
+Este término no mide una distancia ordinaria. Mide una distancia ajustada por la matriz de covarianza. Eso significa que un punto puede parecer lejano en términos euclídeos, pero no necesariamente ser raro si se encuentra en una dirección donde los datos varían mucho. De manera inversa, un punto puede parecer moderadamente cercano en distancia euclídea, pero ser estadísticamente inusual si se ubica en una dirección donde los datos casi no varían. Esta idea será la base para introducir la distancia de Mahalanobis.
+
+# 3. Simulación inicial en R
+
+En esta sección generaremos una muestra artificial de una distribución normal bivariada. Trabajar con datos simulados es útil porque permite controlar explícitamente la matriz de covarianza y observar cómo sus cambios afectan la forma de la nube de puntos. Esto ayuda a conectar la fórmula matemática con la intuición visual.
+
+```{r sim-normal-base}
+set.seed(123)
+
+mu <- c(0, 0)
+
+Sigma <- matrix(c(
+  1.0, 0.75,
+  0.75, 1.5
+), nrow = 2, byrow = TRUE)
+
+datos <- MASS::mvrnorm(n = 700, mu = mu, Sigma = Sigma)
+
+df <- data.frame(
+  X1 = datos[, 1],
+  X2 = datos[, 2]
+)
+
+head(df)
+```
+
+```{r resumen-base}
+colMeans(df)
+cov(df)
+cor(df)
+```
+
+Los resultados numéricos permiten verificar que la muestra generada tiene una media cercana al vector $\boldsymbol{\mu}=(0,0)^T$ y una matriz de covarianza cercana a la matriz $\Sigma$ definida previamente. Como se trata de una simulación aleatoria, los valores muestrales no coinciden exactamente con los parámetros poblacionales, pero se aproximan a ellos. Esta distinción entre parámetro teórico y estimador muestral es importante: en la práctica casi nunca conocemos $\boldsymbol{\mu}$ ni $\Sigma$, sino que los estimamos a partir de los datos.
+
+# 4. Visualización de la nube de puntos y elipse normal
+
+```{r grafico-elipse-base}
+g_base <- ggplot(df, aes(X1, X2)) +
+  geom_point(alpha = 0.45, size = 1.8) +
+  stat_ellipse(type = "norm", linewidth = 1.1) +
+  geom_point(aes(x = mean(X1), y = mean(X2)), size = 3) +
+  labs(
+    title = "Distribución normal bivariada simulada",
+    subtitle = "La elipse resume la orientación y dispersión inducidas por la matriz de covarianza",
+    x = "X1",
+    y = "X2"
+  ) +
+  theme_minimal(base_size = 13)
+
+g_base
+plotly::ggplotly(g_base)
+```
+
+La nube de puntos representa realizaciones del vector aleatorio bivariado. Cada punto es una observación compuesta por dos coordenadas: $X_1$ y $X_2$. La elipse dibujada sobre los datos resume una región de concentración asociada a una normal bivariada. En vez de tener una campana visible en una sola dimensión, ahora la distribución se observa como una nube en el plano, cuya forma depende de las varianzas y covarianzas. La inclinación de la elipse indica dependencia lineal positiva: cuando $X_1$ tiende a aumentar, $X_2$ también suele aumentar.
+
+La elipse no es un adorno gráfico; es una representación geométrica de la matriz de covarianza. Si las variables fueran independientes y tuvieran varianzas similares, la nube tendería a ser circular. Si una variable tiene mayor varianza que otra, la nube se estira en esa dirección. Si existe covarianza positiva o negativa, la nube rota. Por eso una de las frases más importantes de esta clase es: **la matriz de covarianza define la geometría de los datos**. Entender esta relación permite conectar la estadística, el álgebra lineal y la visualización en un mismo marco conceptual.
+
+# 5. Curvas de nivel de densidad
+
+La normal multivariante tiene superficies de densidad. En dos dimensiones, esas superficies pueden visualizarse como un relieve tridimensional o como curvas de nivel. Las curvas de nivel son conjuntos de puntos que tienen la misma densidad, y en la normal multivariante esos conjuntos tienen forma elíptica.
+
+Matemáticamente, las curvas de nivel se obtienen manteniendo constante el término cuadrático:
+
+$$
+(\mathbf{x}-\boldsymbol{\mu})^T\Sigma^{-1}(\mathbf{x}-\boldsymbol{\mu}) = c
+$$
+
+donde $c$ es una constante positiva. Cada valor de $c$ define una elipse diferente: valores pequeños representan regiones cercanas al centro y valores grandes representan regiones más alejadas. Esta relación es esencial porque muestra que la normal multivariante no se organiza por círculos euclídeos, sino por elipses adaptadas a la matriz de covarianza.
+
+```{r densidad-grid}
+x_seq <- seq(min(df$X1) - 1, max(df$X1) + 1, length.out = 120)
+y_seq <- seq(min(df$X2) - 1, max(df$X2) + 1, length.out = 120)
+
+grid <- expand.grid(X1 = x_seq, X2 = y_seq)
+
+grid$densidad <- mvtnorm::dmvnorm(
+  x = as.matrix(grid[, c("X1", "X2")]),
+  mean = mu,
+  sigma = Sigma
+)
+
+g_contorno <- ggplot(grid, aes(X1, X2, z = densidad)) +
+  geom_contour(bins = 10, linewidth = 0.8) +
+  geom_point(data = df, aes(X1, X2), inherit.aes = FALSE, alpha = 0.20, size = 1.2) +
+  labs(
+    title = "Curvas de nivel de la densidad normal bivariada",
+    subtitle = "Cada curva une puntos con la misma densidad probabilística",
+    x = "X1",
+    y = "X2"
+  ) +
+  theme_minimal(base_size = 13)
+
+g_contorno
+plotly::ggplotly(g_contorno)
+```
+
+El gráfico de contornos permite ver cómo la densidad disminuye al alejarnos del centro. Las curvas internas representan regiones de mayor densidad y las curvas externas regiones de menor densidad. La forma elíptica aparece porque la distancia al centro no se mide igual en todas las direcciones. Donde los datos varían más, la elipse se extiende; donde varían menos, se contrae. Esta es una forma muy potente de explicar que la probabilidad en un espacio multivariante depende tanto de la distancia al centro como de la dirección en la que nos movemos.
+
+Para los estudiantes, este gráfico ayuda a superar una dificultad común: creer que la normal multivariante es simplemente “dos normales pegadas”. En realidad, la distribución conjunta no se reduce a dos marginales. La normal bivariada combina dos comportamientos marginales y una estructura de dependencia. Dos distribuciones pueden tener marginales normales iguales, pero comportamientos conjuntos distintos si cambia la covarianza. Por eso los contornos son una herramienta pedagógica excelente: muestran la estructura conjunta de una forma que un histograma marginal no puede revelar.
+
+# 6. Superficie tridimensional de densidad
+
+```{r superficie-3d}
+z_mat <- matrix(grid$densidad, nrow = length(x_seq), ncol = length(y_seq))
+
+plotly::plot_ly(
+  x = x_seq,
+  y = y_seq,
+  z = z_mat,
+  type = "surface"
+) |>
+  plotly::layout(
+    title = "Superficie de densidad de una normal bivariada",
+    scene = list(
+      xaxis = list(title = "X1"),
+      yaxis = list(title = "X2"),
+      zaxis = list(title = "Densidad")
+    )
+  )
+```
+
+La superficie tridimensional permite visualizar la normal bivariada como una montaña probabilística. El punto más alto se encuentra cerca del vector de medias, y la densidad disminuye gradualmente conforme nos alejamos del centro. Sin embargo, esa disminución no ocurre de manera circular, sino elíptica, porque la matriz de covarianza determina la forma de la base de la superficie. Esta imagen ayuda a relacionar la campana normal univariada con su equivalente multivariante: en una dimensión vemos una curva; en dos dimensiones vemos una superficie.
+
+Este gráfico también permite explicar que las curvas de nivel vistas antes son cortes horizontales de esta superficie. Si cortamos la montaña a distintas alturas, obtenemos elipses. Las elipses cercanas a la cima son pequeñas porque corresponden a zonas de alta densidad; las elipses más externas son grandes porque corresponden a zonas de menor densidad. Esta conexión entre superficie y contornos es muy útil para desarrollar intuición geométrica antes de avanzar hacia inferencia, regiones de confianza o clasificación basada en modelos gaussianos.
+
+# 7. El papel de la matriz de covarianza
+
+La matriz de covarianza $\Sigma$ controla tres aspectos fundamentales:
+
+1. La dispersión individual de cada variable.
+2. La dependencia lineal entre pares de variables.
+3. La orientación geométrica de la nube de datos.
+
+En una normal bivariada:
+
+$$
+\Sigma =
+\begin{pmatrix}
+\sigma_1^2 & \sigma_{12} \\
+\sigma_{21} & \sigma_2^2
+\end{pmatrix}
+$$
+
+Los elementos diagonales son varianzas y los elementos fuera de la diagonal son covarianzas. Si las varianzas son grandes, la nube se dispersa más. Si una varianza es mayor que la otra, la nube se estira más en una dirección. Si la covarianza es positiva, la nube rota con pendiente ascendente; si es negativa, rota con pendiente descendente; si es cero, la nube queda alineada con los ejes.
+
+A nivel conceptual, la matriz de covarianza puede verse como el puente entre datos y geometría. No sólo resume la dispersión, sino que define qué direcciones del espacio son más importantes para explicar la variabilidad. Esta idea será fundamental para PCA, porque el análisis de componentes principales busca precisamente las direcciones donde los datos varían más. En otras palabras, cuando entendemos $\Sigma$, estamos preparando el terreno para entender autovalores, autovectores, componentes principales y reducción de dimensionalidad.
+
+# 8. Comparación de escenarios de covarianza
+
+```{r escenarios-covarianza}
+set.seed(456)
+
+crear_escenario <- function(rho, nombre) {
+  S <- matrix(c(1, rho, rho, 1), 2, 2)
+  X <- MASS::mvrnorm(500, mu = c(0, 0), Sigma = S)
+  data.frame(X1 = X[,1], X2 = X[,2], Escenario = nombre)
+}
+
+df_esc <- bind_rows(
+  crear_escenario(-0.85, "Covarianza negativa"),
+  crear_escenario(0.00, "Covarianza cero"),
+  crear_escenario(0.85, "Covarianza positiva")
+)
+
+g_esc <- ggplot(df_esc, aes(X1, X2)) +
+  geom_point(alpha = 0.35, size = 1.2) +
+  stat_ellipse(type = "norm", linewidth = 1) +
+  facet_wrap(~Escenario, nrow = 1) +
+  labs(
+    title = "Efecto de la covarianza sobre la orientación de la normal bivariada",
+    x = "X1",
+    y = "X2"
+  ) +
+  theme_minimal(base_size = 13)
+
+g_esc
+```
+
+El primer escenario muestra covarianza negativa: los puntos tienden a organizarse en una banda descendente. El segundo escenario muestra covarianza cercana a cero: los puntos no tienen una orientación diagonal clara y la elipse queda alineada con los ejes. El tercer escenario muestra covarianza positiva: los puntos se organizan en una banda ascendente. Estos tres casos permiten explicar que la covarianza no sólo es un número, sino una propiedad geométrica observable.
+
+Este bloque debe usarse en clase como una comparación visual fuerte. El docente puede preguntar: ¿qué cambia entre los paneles si las varianzas son similares? La respuesta esperada es la orientación. Luego puede preguntar: ¿qué elemento de la matriz controla esa orientación? La respuesta es la covarianza. Con esto se logra que el estudiante no vea $\sigma_{12}$ como un símbolo abstracto, sino como el número que inclina la nube de datos.
+
+# 9. Independencia en la normal multivariante
+
+En estadística general, correlación cero no necesariamente implica independencia. Existen muchas relaciones no lineales donde la correlación puede ser cercana a cero y, aun así, las variables son claramente dependientes. Sin embargo, en el caso especial de la normal multivariante ocurre una propiedad muy importante: si las variables tienen covarianza cero, entonces son independientes.
+
+Para una normal bivariada, si:
+
+$$
+\Sigma =
+\begin{pmatrix}
+\sigma_1^2 & 0 \\
+0 & \sigma_2^2
+\end{pmatrix}
+$$
+
+entonces $X_1$ y $X_2$ son independientes. Esto sucede porque la estructura conjunta de la normal multivariante está completamente determinada por el vector de medias y la matriz de covarianza. Si no hay covarianza, no queda otro tipo de dependencia escondida dentro del modelo normal. Esta es una propiedad especial de la familia normal y no debe generalizarse de manera automática a cualquier distribución.
+
+```{r independencia-normal}
+set.seed(789)
+
+Sigma_ind <- matrix(c(
+  1.5, 0,
+  0, 0.5
+), 2, 2)
+
+datos_ind <- MASS::mvrnorm(600, mu = c(0, 0), Sigma = Sigma_ind)
+df_ind <- data.frame(X1 = datos_ind[,1], X2 = datos_ind[,2])
+
+g_ind <- ggplot(df_ind, aes(X1, X2)) +
+  geom_point(alpha = 0.45, size = 1.5) +
+  stat_ellipse(type = "norm", linewidth = 1.1) +
+  labs(
+    title = "Normal bivariada con covarianza cero",
+    subtitle = "En la normal multivariante, covarianza cero implica independencia",
+    x = "X1",
+    y = "X2"
+  ) +
+  theme_minimal(base_size = 13)
+
+g_ind
+```
+
+Este gráfico permite observar una elipse alineada con los ejes. La variable $X_1$ tiene mayor dispersión que $X_2$, por eso la elipse es más ancha horizontalmente. Sin embargo, al no existir covarianza, la nube no rota. La ausencia de rotación indica que no hay dependencia lineal entre las variables y, bajo el supuesto de normalidad multivariante, esto equivale a independencia. Esta interpretación debe recalcarse con cuidado: la equivalencia entre no correlación e independencia es cierta aquí por la estructura normal, no por una regla universal de la estadística.
+
+# 10. Distancia euclídea vs distancia de Mahalanobis
+
+La distancia euclídea mide el alejamiento ordinario entre dos puntos:
+
+$$
+d_E(\mathbf{x},\boldsymbol{\mu}) =
+\sqrt{(\mathbf{x}-\boldsymbol{\mu})^T(\mathbf{x}-\boldsymbol{\mu})}
+$$
+
+Esta distancia trata todas las direcciones del espacio de la misma manera. Sin embargo, en un contexto multivariante con variables correlacionadas y escalas distintas, esa forma de medir puede ser engañosa. Dos puntos con la misma distancia euclídea al centro pueden tener significados estadísticos muy diferentes si uno se ubica en una dirección de alta variabilidad y otro en una dirección de baja variabilidad.
+
+La distancia de Mahalanobis corrige este problema al incorporar la matriz de covarianza:
+
+$$
+D_M^2(\mathbf{x}) =
+(\mathbf{x}-\boldsymbol{\mu})^T
+\Sigma^{-1}
+(\mathbf{x}-\boldsymbol{\mu})
+$$
+
+Esta distancia mide qué tan lejos está un punto respecto al centro, pero ajustando por la forma real de la nube de datos. Si un punto se ubica en la dirección natural de mayor dispersión, su distancia estadística puede no ser tan grande. Si se ubica en una dirección poco frecuente, su distancia de Mahalanobis aumenta. Por eso esta distancia es fundamental para detectar valores atípicos multivariantes.
+
+```{r mahalanobis-base}
+mu_hat <- colMeans(df)
+Sigma_hat <- cov(df)
+
+df$D2_Mahalanobis <- mahalanobis(
+  x = df[, c("X1", "X2")],
+  center = mu_hat,
+  cov = Sigma_hat
+)
+
+df$Dist_Euclidea <- sqrt((df$X1 - mu_hat[1])^2 + (df$X2 - mu_hat[2])^2)
+
+head(df)
+```
+
+```{r grafico-mahalanobis}
+g_mah <- ggplot(df, aes(X1, X2, color = D2_Mahalanobis)) +
+  geom_point(size = 2, alpha = 0.85) +
+  stat_ellipse(aes(color = NULL), type = "norm", linewidth = 1.1) +
+  scale_color_viridis_c(option = "C") +
+  labs(
+    title = "Distancia de Mahalanobis en una normal bivariada",
+    subtitle = "El color indica alejamiento estadístico respecto al centro y la covarianza",
+    x = "X1",
+    y = "X2",
+    color = "D² Mahalanobis"
+  ) +
+  theme_minimal(base_size = 13)
+
+g_mah
+plotly::ggplotly(g_mah)
+```
+
+En el gráfico, los puntos con colores más intensos tienen mayor distancia de Mahalanobis. Esto no depende únicamente de qué tan lejos estén visualmente del centro, sino de la dirección en la que se alejan. La distancia de Mahalanobis respeta la forma elíptica de los datos. Por eso es más adecuada que la distancia euclídea cuando las variables tienen correlación o varianzas diferentes.
+
+Esta idea tiene aplicaciones prácticas muy importantes. En control de calidad, un punto puede parecer normal en cada variable individual, pero ser atípico cuando se observa la combinación de variables. En análisis financiero, una combinación inusual de indicadores puede ser más relevante que un valor extremo individual. En minería de datos, la detección de anomalías multivariantes depende precisamente de entender el comportamiento conjunto. Por eso Mahalanobis no es sólo una fórmula: es una herramienta de lectura estadística del espacio multidimensional.
+
+# 11. Regiones de confianza y umbrales con chi-cuadrado
+
+Bajo normalidad multivariante, la distancia cuadrada de Mahalanobis sigue aproximadamente una distribución chi-cuadrado con $p$ grados de libertad:
+
+$$
+D_M^2 \sim \chi^2_p
+$$
+
+Esto permite construir regiones de confianza elípticas. Por ejemplo, en dimensión dos, una región aproximada del 95% se define por los puntos que cumplen:
+
+$$
+D_M^2 \leq \chi^2_{2,0.95}
+$$
+
+donde $\chi^2_{2,0.95}$ es el percentil 95 de una chi-cuadrado con dos grados de libertad. Esta propiedad conecta la geometría de la normal multivariante con la inferencia estadística. Las elipses ya no son sólo dibujos descriptivos, sino regiones probabilísticas con interpretación formal.
+
+```{r umbral-chi}
+p <- 2
+umbral_95 <- qchisq(0.95, df = p)
+umbral_99 <- qchisq(0.99, df = p)
+
+umbral_95
+umbral_99
+
+df <- df |>
+  mutate(
+    Clasificacion_95 = ifelse(D2_Mahalanobis <= umbral_95, "Dentro región 95%", "Fuera región 95%")
+  )
+
+ggplot(df, aes(X1, X2, color = Clasificacion_95)) +
+  geom_point(alpha = 0.75, size = 2) +
+  stat_ellipse(aes(color = NULL), type = "norm", level = 0.95, linewidth = 1.2) +
+  labs(
+    title = "Región aproximada del 95% usando normalidad multivariante",
+    subtitle = "Los puntos fuera de la región pueden considerarse candidatos a atípicos multivariantes",
+    x = "X1",
+    y = "X2",
+    color = "Clasificación"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+Este gráfico permite introducir una idea fundamental: un valor atípico multivariante no se define únicamente por estar lejos en una variable. Se define por su posición conjunta respecto a la estructura completa de los datos. Un punto fuera de la elipse del 95% puede ser considerado inusual bajo el modelo normal multivariante, aunque sus valores individuales no parezcan extremos. Esta es una diferencia clave entre análisis univariado y multivariado.
+
+Para explicar esto en clase, conviene usar una analogía visual: si la nube de datos tiene forma de avenida diagonal, un punto que cae a lo largo de la avenida puede estar lejos del centro pero seguir siendo razonable; en cambio, un punto que se aleja perpendicularmente de la avenida puede ser raro incluso si no está tan lejos en distancia ordinaria. Esa es la lógica de Mahalanobis y de las regiones elípticas.
+
+# 12. Cambios en la matriz de covarianza: laboratorio visual
+
+En esta sección se comparan cuatro matrices de covarianza distintas. El objetivo es que el estudiante observe cómo cambia la forma de los datos cuando se modifican varianzas y covarianzas.
+
+```{r laboratorio-covarianza}
+set.seed(2026)
+
+simular_normal <- function(Sigma, nombre) {
+  X <- MASS::mvrnorm(500, mu = c(0, 0), Sigma = Sigma)
+  data.frame(
+    X1 = X[,1],
+    X2 = X[,2],
+    Escenario = nombre
+  )
+}
+
+S1 <- matrix(c(1, 0, 0, 1), 2, 2)
+S2 <- matrix(c(3, 0, 0, 0.5), 2, 2)
+S3 <- matrix(c(1, 0.8, 0.8, 1), 2, 2)
+S4 <- matrix(c(1, -0.8, -0.8, 1), 2, 2)
+
+df_lab <- bind_rows(
+  simular_normal(S1, "Circular: varianzas iguales, covarianza 0"),
+  simular_normal(S2, "Estirada: varianzas distintas, covarianza 0"),
+  simular_normal(S3, "Rotada positiva: covarianza positiva"),
+  simular_normal(S4, "Rotada negativa: covarianza negativa")
+)
+
+ggplot(df_lab, aes(X1, X2)) +
+  geom_point(alpha = 0.30, size = 1.2) +
+  stat_ellipse(type = "norm", linewidth = 1) +
+  facet_wrap(~Escenario, ncol = 2) +
+  coord_equal() +
+  labs(
+    title = "Laboratorio visual: efectos de la matriz de covarianza",
+    x = "X1",
+    y = "X2"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+El primer panel representa el caso más simple: varianzas iguales y covarianza cero. Allí la nube tiende a ser circular, porque no hay una dirección privilegiada de variabilidad. El segundo panel mantiene covarianza cero, pero cambia las varianzas: la nube se estira más en la variable con mayor dispersión. El tercer y cuarto panel introducen covarianza positiva y negativa, generando rotaciones en direcciones opuestas. Estos escenarios permiten entender que la matriz $\Sigma$ tiene efectos separables: escala, estiramiento y rotación.
+
+Este laboratorio es especialmente útil para clase porque permite hacer preguntas guiadas: ¿qué matriz produce una nube circular? ¿qué matriz produce una nube horizontal? ¿qué elemento de la matriz cambia cuando la elipse rota? ¿qué diferencia hay entre dispersión individual y dependencia entre variables? Con estas preguntas, el estudiante empieza a leer la matriz de covarianza como un objeto geométrico y no sólo como una tabla numérica.
+
+# 13. Autovalores, autovectores y orientación de la elipse
+
+La matriz de covarianza puede descomponerse mediante autovalores y autovectores. Los autovectores indican las direcciones principales de variación y los autovalores indican cuánta varianza hay en cada una de esas direcciones. Esta idea será el corazón del análisis de componentes principales.
+
+$$
+\Sigma \mathbf{v}_j = \lambda_j \mathbf{v}_j
+$$
+
+donde $\mathbf{v}_j$ es un autovector y $\lambda_j$ es su autovalor asociado.
+
+Los autovectores definen los ejes de la elipse, mientras que los autovalores determinan la longitud relativa de esos ejes. Si un autovalor es mucho mayor que otro, la nube de datos se alarga fuertemente en una dirección. Si ambos autovalores son similares, la nube es más redondeada. Esta interpretación permite conectar la normal multivariante con PCA de manera natural: PCA busca precisamente las direcciones de máxima variabilidad, que son los autovectores de la matriz de covarianza.
+
+```{r eigen-cov}
+Sigma_hat <- cov(df[, c("X1", "X2")])
+eig <- eigen(Sigma_hat)
+
+eig$values
+eig$vectors
+```
+
+```{r grafico-autovectores}
+centro <- colMeans(df[, c("X1", "X2")])
+
+autovectores <- data.frame(
+  x = centro[1],
+  y = centro[2],
+  xend = centro[1] + eig$vectors[1,] * sqrt(eig$values) * 2,
+  yend = centro[2] + eig$vectors[2,] * sqrt(eig$values) * 2,
+  Componente = c("Dirección principal 1", "Dirección principal 2")
+)
+
+ggplot(df, aes(X1, X2)) +
+  geom_point(alpha = 0.35, size = 1.4) +
+  stat_ellipse(type = "norm", linewidth = 1.1) +
+  geom_segment(
+    data = autovectores,
+    aes(x = x, y = y, xend = xend, yend = yend),
+    arrow = arrow(length = unit(0.25, "cm")),
+    linewidth = 1.2,
+    inherit.aes = FALSE
+  ) +
+  geom_point(aes(x = centro[1], y = centro[2]), size = 3) +
+  coord_equal() +
+  labs(
+    title = "Autovectores de la matriz de covarianza",
+    subtitle = "Los autovectores marcan los ejes principales de la elipse",
+    x = "X1",
+    y = "X2"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+Este gráfico introduce visualmente la idea de componentes principales. Las flechas representan las direcciones de máxima y mínima variabilidad de los datos. La dirección más larga corresponde al autovector asociado al mayor autovalor. Esta dirección coincide con el eje mayor de la elipse. La dirección perpendicular corresponde al segundo autovector y representa una dirección de menor variabilidad. Esta lectura geométrica será decisiva para que los estudiantes entiendan PCA sin verlo como una técnica mecánica de software.
+
+Desde el punto de vista docente, este es uno de los momentos más importantes de la clase. Aquí se puede decir: “lo que hoy vemos como ejes de la elipse, en la siguiente unidad se convertirá en componentes principales”. Así se muestra continuidad entre normal multivariante, covarianza, geometría y reducción de dimensionalidad. El estudiante comprende que PCA no aparece de la nada, sino que nace de estudiar la estructura de variabilidad de una nube de datos.
+
+# 14. Normal multivariante en dimensión tres
+
+Aunque visualizar más de dos dimensiones es más difícil, la normal multivariante se define para cualquier número de variables. En tres dimensiones, cada observación es un punto en el espacio y la matriz de covarianza define una estructura elipsoidal.
+
+```{r normal-3d}
+set.seed(3030)
+
+mu3 <- c(0, 0, 0)
+Sigma3 <- matrix(c(
+  1.0, 0.7, 0.4,
+  0.7, 1.5, 0.6,
+  0.4, 0.6, 1.2
+), 3, 3, byrow = TRUE)
+
+X3 <- MASS::mvrnorm(800, mu = mu3, Sigma = Sigma3)
+
+df3 <- data.frame(
+  X1 = X3[,1],
+  X2 = X3[,2],
+  X3 = X3[,3]
+)
+
+plotly::plot_ly(
+  df3,
+  x = ~X1,
+  y = ~X2,
+  z = ~X3,
+  type = "scatter3d",
+  mode = "markers",
+  marker = list(size = 3, opacity = 0.55)
+) |>
+  plotly::layout(
+    title = "Nube normal multivariante en tres dimensiones",
+    scene = list(
+      xaxis = list(title = "X1"),
+      yaxis = list(title = "X2"),
+      zaxis = list(title = "X3")
+    )
+  )
+```
+
+En tres dimensiones, la nube de puntos ya no forma una elipse sino un elipsoide. La idea es la misma: el vector de medias define el centro y la matriz de covarianza define la forma, la orientación y la dispersión. La dificultad visual aumenta, pero la teoría no cambia. Esta es una de las ventajas de la formulación matricial: permite extender el análisis a muchas dimensiones sin tener que rediseñar completamente los conceptos.
+
+Este ejemplo también permite advertir una limitación práctica del análisis multivariante: a medida que aumenta la dimensión, la visualización directa se vuelve más difícil. Por eso técnicas como PCA son tan importantes, porque permiten proyectar la información de muchas variables en pocas dimensiones manteniendo la mayor cantidad posible de variabilidad. Así, la normal multivariante no sólo es un modelo probabilístico, sino también una puerta de entrada a los métodos de reducción de dimensionalidad.
+
+# 15. Relación con la distribución t-student multivariante
+
+La distribución t-student multivariante es una alternativa a la normal multivariante cuando se desea modelar datos con colas más pesadas. Esto significa que permite mayor probabilidad de valores alejados del centro. En contextos reales, especialmente con datos económicos, sociales, financieros o de comportamiento humano, las observaciones extremas pueden ser más frecuentes de lo que predice una normal multivariante.
+
+Aunque en esta clase no desarrollaremos completamente la t-student multivariante, es importante ubicarla conceptualmente. La normal multivariante es el punto de partida, pero no siempre es el modelo más robusto. Cuando existen atípicos fuertes o colas pesadas, modelos alternativos como la t multivariante pueden representar mejor la realidad. Esto prepara al estudiante para no asumir normalidad de manera automática y para entender que todo modelo debe contrastarse con los datos.
+
+```{r comparacion-normal-t}
+set.seed(4040)
+
+df_normal <- data.frame(
+  X1 = df$X1,
+  X2 = df$X2,
+  Modelo = "Normal bivariada"
+)
+
+nu <- 3
+Z <- MASS::mvrnorm(700, mu = c(0, 0), Sigma = Sigma)
+W <- rchisq(700, df = nu)
+Tsim <- Z / sqrt(W / nu)
+
+df_t <- data.frame(
+  X1 = Tsim[,1],
+  X2 = Tsim[,2],
+  Modelo = "t multivariante aproximada"
+)
+
+df_comp <- bind_rows(df_normal, df_t)
+
+ggplot(df_comp, aes(X1, X2)) +
+  geom_point(alpha = 0.35, size = 1.2) +
+  stat_ellipse(type = "norm", linewidth = 1) +
+  facet_wrap(~Modelo) +
+  coord_equal() +
+  labs(
+    title = "Comparación conceptual: normal multivariante vs t multivariante",
+    subtitle = "La t multivariante tiende a producir más observaciones alejadas del centro",
+    x = "X1",
+    y = "X2"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+El gráfico permite observar que la distribución t multivariante produce más puntos extremos. Esto es consistente con la idea de colas pesadas. Aunque ambas nubes pueden parecer similares en el centro, difieren en la probabilidad de observaciones alejadas. Esta comparación es útil para discutir con los estudiantes que la normal multivariante es un modelo fundamental, pero no siempre suficiente. El análisis estadístico responsable exige evaluar si sus supuestos son razonables para el problema estudiado.
+
+# 16. Diagnóstico visual de normalidad multivariante
+
+Una forma práctica de evaluar normalidad multivariante es analizar las distancias de Mahalanobis. Si los datos provienen aproximadamente de una normal multivariante de dimensión $p$, las distancias cuadradas de Mahalanobis deberían comportarse de manera similar a una distribución chi-cuadrado con $p$ grados de libertad.
+
+```{r qq-mahalanobis}
+D2 <- mahalanobis(df[, c("X1", "X2")], center = colMeans(df[, c("X1", "X2")]), cov = cov(df[, c("X1", "X2")]))
+
+qq_df <- data.frame(
+  teorico = qchisq(ppoints(length(D2)), df = 2),
+  observado = sort(D2)
+)
+
+ggplot(qq_df, aes(teorico, observado)) +
+  geom_point(alpha = 0.65) +
+  geom_abline(slope = 1, intercept = 0, linewidth = 1) +
+  labs(
+    title = "QQ-plot de distancias de Mahalanobis",
+    subtitle = "Bajo normalidad multivariante, los puntos deberían aproximarse a la línea",
+    x = "Cuantiles teóricos chi-cuadrado",
+    y = "Distancias de Mahalanobis observadas"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+Este gráfico compara las distancias de Mahalanobis observadas con los cuantiles teóricos de una distribución chi-cuadrado. Si los puntos siguen aproximadamente la línea diagonal, hay evidencia visual compatible con normalidad multivariante. Si los puntos se desvían mucho, especialmente en la parte superior, puede haber colas pesadas, atípicos o desviaciones importantes del supuesto normal.
+
+Es importante explicar que este diagnóstico no constituye una prueba definitiva por sí solo. La normalidad multivariante es un supuesto fuerte y debe evaluarse con varias herramientas: gráficos, distancias, análisis marginales, pruebas formales si son pertinentes y conocimiento del contexto. Sin embargo, el QQ-plot de Mahalanobis es una herramienta muy didáctica porque conecta directamente la teoría de la normal multivariante con una práctica de diagnóstico aplicada.
+
+# 17. Resumen integrador de la clase
+
+La distribución normal multivariante extiende la normal univariada al caso en que se analizan varias variables simultáneamente. Su estructura está gobernada por dos objetos centrales: el vector de medias $\boldsymbol{\mu}$ y la matriz de covarianza $\Sigma$. El primero define el centro de la distribución; la segunda define dispersión, dependencia, orientación y geometría. Las curvas de nivel de una normal multivariante son elipses en dos dimensiones y elipsoides en dimensiones superiores.
+
+El concepto más importante de esta clase es que la distancia en análisis multivariante no debe entenderse únicamente como distancia euclídea. La distancia de Mahalanobis permite medir alejamiento estadístico teniendo en cuenta la covarianza. Esta idea permite construir regiones de confianza, identificar observaciones atípicas y entender por qué algunas direcciones del espacio son más naturales que otras. Además, la descomposición de la matriz de covarianza mediante autovalores y autovectores conecta directamente con PCA, que será uno de los temas centrales posteriores del syllabus.
+
+# 18. Actividad guiada para clase
+
+## Parte A: interpretación conceptual
+
+Responda en grupo:
+
+1. ¿Qué representa el vector de medias en una normal multivariante?
+2. ¿Por qué la matriz de covarianza define la forma de la nube de datos?
+3. ¿Qué diferencia hay entre una nube circular y una nube elíptica?
+4. ¿Por qué la distancia de Mahalanobis puede detectar atípicos que la distancia euclídea no detecta?
+5. ¿En qué caso la correlación cero implica independencia?
+6. ¿Cómo se conectan autovalores y autovectores con los ejes de la elipse?
+
+## Parte B: modificación de parámetros
+
+Cambie los valores de la siguiente matriz y observe cómo se modifica la nube:
+
+```{r actividad-parametros}
+set.seed(5050)
+
+Sigma_actividad <- matrix(c(
+  2.0, 1.2,
+  1.2, 1.0
+), 2, 2, byrow = TRUE)
+
+datos_actividad <- MASS::mvrnorm(
+  n = 600,
+  mu = c(2, -1),
+  Sigma = Sigma_actividad
+)
+
+df_actividad <- data.frame(
+  X1 = datos_actividad[,1],
+  X2 = datos_actividad[,2]
+)
+
+ggplot(df_actividad, aes(X1, X2)) +
+  geom_point(alpha = 0.45, size = 1.5) +
+  stat_ellipse(type = "norm", linewidth = 1.1) +
+  coord_equal() +
+  labs(
+    title = "Actividad: modificar la matriz de covarianza",
+    subtitle = "Cambie varianzas y covarianzas para observar escala, estiramiento y rotación",
+    x = "X1",
+    y = "X2"
+  ) +
+  theme_minimal(base_size = 13)
+
+cov(df_actividad)
+cor(df_actividad)
+```
+
+## Parte C: análisis escrito
+
+Después de modificar la matriz, escriba un párrafo interpretativo que responda:
+
+- ¿La nube quedó más circular o más alargada?
+- ¿La elipse se orienta hacia arriba o hacia abajo?
+- ¿Cuál elemento de la matriz explica esa orientación?
+- ¿Cuál variable presenta mayor dispersión?
+- ¿Qué relación tiene este ejercicio con PCA?
+
+# 19. Cierre de la clase
+
+La clase de hoy mostró que la normal multivariante no debe entenderse únicamente como una fórmula, sino como una estructura geométrica y probabilística. Cada punto observado se ubica dentro de una nube; esa nube tiene un centro, una forma, una orientación y una dispersión; y todos esos elementos están codificados en el vector de medias y la matriz de covarianza. Cuando comprendemos esa geometría, las fórmulas dejan de ser símbolos abstractos y se convierten en herramientas para leer la forma real de los datos.
+
+En la siguiente clase el paso natural será entrar al **Análisis de Componentes Principales (PCA)**. Allí veremos cómo la matriz de covarianza permite encontrar nuevas direcciones de análisis, cómo los autovectores se convierten en componentes principales y cómo los autovalores explican la proporción de variabilidad capturada. Dicho de otra manera, PCA será la aplicación directa de lo aprendido hoy: usar la geometría de la covarianza para transformar, resumir e interpretar datos multidimensionales.

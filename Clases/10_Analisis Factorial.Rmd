@@ -1,0 +1,480 @@
+---
+title: "Notas de Clase: Análisis Factorial"
+subtitle: "Variables Latentes y Estructura Oculta de los Datos"
+author: "Universidad Distrital Francisco José de Caldas"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: cosmo
+    code_folding: show
+    df_print: paged
+    fig_width: 9
+    fig_height: 5.8
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 9,
+  fig.height = 5.8
+)
+```
+
+```{r packages, include=FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(psych)
+library(GGally)
+library(scales)
+```
+
+# Introducción
+
+Hasta este momento del curso se han estudiado diferentes herramientas del análisis multivariante: covarianza, correlación, distribución normal multivariante, distancia de Mahalanobis, PCA, ANOVA y MANOVA. Todas estas técnicas permiten describir, visualizar, transformar o comparar estructuras multivariantes. Sin embargo, aparece ahora una nueva pregunta estadística extremadamente importante: ¿existen variables ocultas detrás de las variables observadas?
+
+Muchas veces las variables medidas directamente son solamente manifestaciones de estructuras más profundas. Por ejemplo, ansiedad, estrés, irritabilidad e insomnio podrían estar relacionadas con un factor oculto llamado salud mental. El análisis factorial surge precisamente para estudiar este tipo de estructuras latentes. Su objetivo no es solamente reducir variables, sino interpretar qué dimensiones ocultas explican las correlaciones entre variables observadas.
+
+# Objetivos de aprendizaje
+
+Al finalizar esta clase el estudiante estará en capacidad de:
+
+- Explicar qué es una variable latente.
+- Diferenciar variables observadas y factores.
+- Interpretar el modelo factorial.
+- Comprender cargas factoriales.
+- Interpretar comunalidad y unicidad.
+- Aplicar análisis factorial en R.
+- Diferenciar PCA y análisis factorial.
+- Interpretar factores desde contexto aplicado.
+
+# Variables observadas y variables latentes
+
+## Variables observadas
+
+Son variables que pueden medirse directamente. Ejemplos comunes son edad, salario, presión arterial, altura, temperatura, cantidad de ventas, número de reclamos o tiempo de respuesta. Estas variables existen explícitamente en la base de datos y pueden registrarse mediante instrumentos, sistemas de información o encuestas.
+
+## Variables latentes
+
+Son variables que no se observan directamente. Ejemplos frecuentes son inteligencia, satisfacción, ansiedad, pobreza multidimensional, calidad de vida, confianza institucional, percepción de seguridad o riesgo financiero. Estas variables deben inferirse a partir de otras variables observadas. Por eso el análisis factorial es muy usado en psicometría, ciencias sociales, mercadeo, salud, educación, finanzas y minería de datos.
+
+# Idea central del análisis factorial
+
+El análisis factorial busca explicar las correlaciones entre variables observadas usando un número menor de factores ocultos. La lógica es la siguiente: si varias variables están correlacionadas, posiblemente comparten una causa común. Esa causa común no necesariamente se observa directamente; por eso se denomina factor latente.
+
+Por ejemplo, si cansancio, estrés, insomnio e irritabilidad están correlacionadas positivamente, podría existir una dimensión común que las explica parcialmente, como fatiga emocional. El análisis factorial intenta descubrir esas dimensiones comunes y separar lo que comparten las variables de lo que es específico de cada una.
+
+# Modelo factorial
+
+El modelo factorial puede escribirse como:
+
+$$
+X = \Lambda F + \epsilon
+$$
+
+donde:
+
+| Símbolo | Significado |
+|---|---|
+| \(X\) | variables observadas |
+| \(F\) | factores latentes |
+| \(\Lambda\) | matriz de cargas factoriales |
+| \(\epsilon\) | error, parte específica o unicidad |
+
+Cada variable observada se modela como una combinación de factores comunes más una parte específica. Por tanto, las correlaciones entre variables se explican porque comparten factores latentes. Esta es la diferencia clave con técnicas puramente descriptivas: el análisis factorial propone una estructura subyacente para explicar la matriz de correlaciones.
+
+# Diferencia entre PCA y análisis factorial
+
+Aunque PCA y análisis factorial pueden parecer similares porque ambos generan nuevas dimensiones, conceptualmente responden preguntas distintas.
+
+| PCA | Análisis factorial |
+|---|---|
+| Reduce dimensión | Descubre factores latentes |
+| Maximiza varianza total | Explica correlaciones comunes |
+| Genera componentes | Genera factores |
+| Es principalmente algebraico | Es un modelo estadístico |
+| Usa toda la varianza | Separa varianza común y específica |
+| Es descriptivo | Es interpretativo y latente |
+
+PCA pregunta: ¿cómo puedo resumir variables en menos dimensiones conservando varianza? El análisis factorial pregunta: ¿qué estructuras ocultas explican las relaciones entre las variables observadas?
+
+# Dataset de trabajo: USArrests
+
+Usaremos el dataset `USArrests`, incluido en R. Este conjunto contiene información de arrestos por delitos violentos en Estados Unidos. Las variables son:
+
+- `Murder`: tasa de arrestos por asesinato.
+- `Assault`: tasa de arrestos por asalto.
+- `UrbanPop`: porcentaje de población urbana.
+- `Rape`: tasa de arrestos por violación.
+
+```{r cargar-dataset}
+data("USArrests")
+
+head(USArrests)
+```
+
+# Exploración inicial
+
+```{r estructura}
+str(USArrests)
+
+summary(USArrests)
+```
+
+Antes de aplicar análisis factorial, se debe revisar la estructura de los datos. Las variables están en escalas diferentes y representan fenómenos relacionados con criminalidad y urbanización. Como el análisis factorial se basa en correlaciones, el foco inicial será estudiar la matriz de correlación.
+
+# Matriz de correlación
+
+```{r correlacion}
+cor_US <- cor(USArrests)
+
+round(cor_US, 3)
+```
+
+La matriz de correlación permite identificar qué variables se mueven juntas. Si las variables tienen correlaciones relevantes, puede existir una estructura factorial. Si no existieran correlaciones, el análisis factorial no tendría mucho sentido, porque no habría estructura común que explicar.
+
+# Visualización de correlaciones
+
+```{r heatmap}
+cor_larga <- as.data.frame(as.table(cor_US))
+
+ggplot(cor_larga, aes(Var1, Var2, fill = Freq)) +
+  geom_tile() +
+  scale_fill_gradient2(
+    low = "blue",
+    high = "red",
+    mid = "white",
+    midpoint = 0,
+    limits = c(-1, 1)
+  ) +
+  labs(
+    title = "Matriz de correlación",
+    subtitle = "Relaciones lineales entre variables del dataset USArrests",
+    x = "",
+    y = "",
+    fill = "Correlación"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+Los colores intensos indican correlaciones fuertes. Las correlaciones positivas indican que las variables tienden a aumentar juntas, mientras que las negativas indican que una aumenta cuando otra disminuye. El análisis factorial aprovecha precisamente estas relaciones para proponer factores comunes.
+
+# Matriz de dispersión
+
+```{r pairs}
+GGally::ggpairs(USArrests)
+```
+
+La matriz de dispersión permite observar relaciones lineales entre pares de variables. Si se observan patrones lineales o asociaciones claras, esto refuerza la idea de que puede existir una estructura común entre algunas variables.
+
+# Adecuación factorial
+
+Antes de realizar análisis factorial, debe verificarse si la matriz de correlación es adecuada. Dos herramientas frecuentes son:
+
+- KMO.
+- Prueba de Bartlett.
+
+# KMO
+
+El estadístico KMO evalúa la adecuación muestral para análisis factorial. Valores altos indican que las variables comparten suficiente varianza común.
+
+```{r kmo}
+psych::KMO(cor_US)
+```
+
+## Interpretación general
+
+| KMO | Interpretación |
+|---|---|
+| > 0.90 | Excelente |
+| > 0.80 | Muy bueno |
+| > 0.70 | Aceptable |
+| > 0.60 | Regular |
+| < 0.50 | Inadecuado |
+
+Un KMO bajo indica que las correlaciones parciales son relativamente altas y que el análisis factorial puede no ser apropiado. Un KMO aceptable o alto indica que puede haber estructura común entre variables.
+
+# Prueba de Bartlett
+
+La prueba de Bartlett evalúa si la matriz de correlación es significativamente diferente de una matriz identidad.
+
+$$
+H_0: R = I
+$$
+
+donde:
+
+- \(R\): matriz de correlación,
+- \(I\): matriz identidad.
+
+```{r bartlett}
+psych::cortest.bartlett(cor_US, n = nrow(USArrests))
+```
+
+Si el valor p es pequeño, por ejemplo \(p < 0.05\), se rechaza la hipótesis de matriz identidad. Esto significa que existen correlaciones suficientes para justificar un análisis factorial.
+
+# Número de factores
+
+Una pregunta importante es: ¿cuántos factores deben extraerse? Existen varios criterios:
+
+- Criterio de Kaiser: conservar factores con autovalores mayores que 1.
+- Scree plot: observar el punto de quiebre o codo.
+- Interpretabilidad: conservar factores que tengan sentido conceptual.
+- Conocimiento del dominio: seleccionar un número de factores coherente con el problema.
+
+# Autovalores
+
+```{r eigen}
+eigenvalues <- eigen(cor_US)$values
+
+eigenvalues
+```
+
+# Scree Plot
+
+```{r scree}
+plot(
+  eigenvalues,
+  type = "b",
+  pch = 19,
+  xlab = "Factor o componente",
+  ylab = "Autovalor",
+  main = "Scree Plot"
+)
+
+abline(h = 1, col = "red", lty = 2)
+```
+
+El Scree Plot ayuda a decidir cuántos factores conservar. La línea roja representa el criterio de Kaiser. Los autovalores mayores que 1 indican dimensiones que explican más varianza que una variable individual estandarizada.
+
+# Modelo factorial inicial
+
+Ajustaremos un análisis factorial con dos factores sin rotación. La rotación se abordará con mayor profundidad en la siguiente clase.
+
+```{r factanal}
+modelo_fa <- factanal(
+  USArrests,
+  factors = 2,
+  rotation = "none"
+)
+
+modelo_fa
+```
+
+La salida del modelo incluye cargas factoriales, unicidades, proporción de varianza explicada y prueba de ajuste. La interpretación principal se centra en las cargas factoriales y en las unicidades.
+
+# Cargas factoriales
+
+Las cargas factoriales representan la relación entre variables observadas y factores latentes.
+
+## Interpretación general
+
+- Cargas altas positivas: relación fuerte positiva con el factor.
+- Cargas altas negativas: relación fuerte inversa con el factor.
+- Cargas cercanas a cero: poca relación con el factor.
+
+Una variable puede cargar fuertemente sobre un factor y débilmente sobre otro. Cuando ocurre esto, la interpretación del factor es más clara.
+
+# Visualización de cargas
+
+```{r loadings}
+loadings_df <- as.data.frame(
+  unclass(modelo_fa$loadings)
+)
+
+loadings_df$Variable <- rownames(loadings_df)
+
+loadings_long <- loadings_df |>
+  pivot_longer(
+    cols = starts_with("Factor"),
+    names_to = "Factor",
+    values_to = "Carga"
+  )
+
+ggplot(loadings_long, aes(Variable, Carga, fill = Factor)) +
+  geom_col(position = "dodge") +
+  coord_flip() +
+  labs(
+    title = "Cargas factoriales",
+    subtitle = "Relación entre variables observadas y factores latentes",
+    x = "Variable",
+    y = "Carga factorial"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+# Interpretación semántica de factores
+
+La interpretación de factores es una tarea estadística y conceptual. No basta con mirar números; se debe revisar qué variables cargan fuerte sobre cada factor y qué tienen en común.
+
+Por ejemplo, si `Murder`, `Assault` y `Rape` cargan fuertemente sobre un factor, ese factor podría interpretarse como una dimensión general de violencia. Si `UrbanPop` carga sobre otro factor, podría representar una dimensión relacionada con urbanización. Los nombres de factores no vienen dados por el algoritmo: los propone el analista con base en las cargas y el contexto.
+
+# Comunalidad y unicidad
+
+## Comunalidad
+
+La comunalidad representa la proporción de varianza de una variable explicada por los factores comunes. Si una variable tiene alta comunalidad, significa que el modelo factorial la explica bien.
+
+## Unicidad
+
+La unicidad representa la proporción de varianza no explicada por los factores comunes. Incluye varianza específica y error. Si una variable tiene alta unicidad, significa que contiene mucha información individual que no está siendo capturada por los factores.
+
+# Unicidades del modelo
+
+```{r uniqueness}
+modelo_fa$uniquenesses
+```
+
+# Cálculo aproximado de comunalidades
+
+```{r comunalidades}
+unicidades <- modelo_fa$uniquenesses
+
+comunalidades <- 1 - unicidades
+
+data.frame(
+  Variable = names(unicidades),
+  Unicidad = unicidades,
+  Comunalidad = comunalidades
+)
+```
+
+Una comunalidad alta indica que la variable está bien representada por los factores. Una unicidad alta indica que el modelo no está capturando completamente el comportamiento de esa variable.
+
+# Scores factoriales
+
+Los scores factoriales representan la posición de cada observación en los factores latentes. Para obtenerlos, se ajusta el modelo con `scores = "regression"`.
+
+```{r scores}
+modelo_scores <- factanal(
+  USArrests,
+  factors = 2,
+  scores = "regression"
+)
+
+head(modelo_scores$scores)
+```
+
+# Visualización de scores
+
+```{r plot-scores}
+scores_df <- as.data.frame(modelo_scores$scores)
+
+scores_df$Estado <- rownames(scores_df)
+
+ggplot(scores_df, aes(Factor1, Factor2)) +
+  geom_point(size = 3, alpha = 0.8) +
+  geom_text(aes(label = Estado), size = 3, vjust = -0.5) +
+  labs(
+    title = "Scores factoriales",
+    subtitle = "Ubicación de los estados en el espacio de factores",
+    x = "Factor 1",
+    y = "Factor 2"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+Los scores permiten representar observaciones según factores latentes. En este ejemplo, los estados pueden ubicarse según dimensiones interpretables como violencia y urbanización, dependiendo de las cargas factoriales obtenidas.
+
+# Relación con PCA
+
+Ahora compararemos con PCA para reforzar la diferencia conceptual.
+
+```{r pca}
+pca <- prcomp(USArrests, scale. = TRUE)
+
+summary(pca)
+```
+
+# PCA visual
+
+```{r pca-plot}
+pca_scores <- as.data.frame(pca$x)
+
+pca_scores$Estado <- rownames(pca_scores)
+
+ggplot(pca_scores, aes(PC1, PC2)) +
+  geom_point(size = 3) +
+  geom_text(aes(label = Estado), size = 3, vjust = -0.5) +
+  labs(
+    title = "PCA del dataset USArrests",
+    subtitle = "Componentes principales como reducción de dimensionalidad",
+    x = "PC1",
+    y = "PC2"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+# Diferencia conceptual final
+
+## PCA
+
+PCA reduce variables y busca nuevas dimensiones que maximicen varianza total.
+
+## Análisis factorial
+
+El análisis factorial busca factores latentes que expliquen las correlaciones entre variables observadas.
+
+Aunque ambos métodos pueden producir representaciones en menos dimensiones, la interpretación no es la misma. En PCA hablamos de componentes; en análisis factorial hablamos de factores latentes.
+
+# Actividad práctica
+
+## Parte 1
+
+Realice:
+
+1. matriz de correlación,
+2. KMO,
+3. prueba de Bartlett,
+4. Scree Plot.
+
+## Parte 2
+
+Construya un análisis factorial con dos factores.
+
+## Parte 3
+
+Interprete:
+
+- cargas factoriales,
+- comunalidades,
+- unicidades,
+- scores factoriales.
+
+## Parte 4
+
+Compare PCA y análisis factorial.
+
+# Preguntas conceptuales
+
+1. ¿Qué es una variable latente?
+2. ¿Qué diferencia existe entre PCA y análisis factorial?
+3. ¿Qué representa una carga factorial?
+4. ¿Qué significa comunalidad?
+5. ¿Qué significa unicidad?
+6. ¿Qué evalúa Bartlett?
+7. ¿Qué evalúa KMO?
+8. ¿Cómo decidir número de factores?
+9. ¿Qué representan los scores factoriales?
+10. ¿Por qué el análisis factorial se considera un modelo latente?
+
+# Conclusión
+
+El análisis factorial es una técnica fundamental del análisis multivariante porque permite estudiar estructuras ocultas detrás de variables observadas. A diferencia de PCA, cuyo objetivo principal es reducir dimensionalidad, el análisis factorial busca modelar relaciones entre variables usando factores latentes.
+
+Esta técnica tiene aplicaciones importantes en psicometría, minería de datos, marketing, ciencias sociales, bioestadística, análisis financiero e inteligencia artificial. Comprender análisis factorial permite pasar de una visión puramente descriptiva a una interpretación estructural profunda de los datos.
+
+# Próxima clase
+
+La siguiente clase abordará rotación factorial e interpretación profunda. Los temas principales serán:
+
+- rotación Varimax,
+- interpretación semántica,
+- simplificación de factores,
+- comparación final entre PCA y análisis factorial.

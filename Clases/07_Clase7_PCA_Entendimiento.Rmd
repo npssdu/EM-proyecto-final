@@ -1,0 +1,587 @@
+---
+title: "Estadística Multidimensional: Análisis de Componentes Principales (PCA)"
+subtitle: "geometría, covarianza, autovalores, interpretación y aplicación en R"
+author: "Universidad Distrital Francisco José de Caldas"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: cosmo
+    df_print: paged
+    code_folding: hide
+    fig_width: 9
+    fig_height: 5.8
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 9,
+  fig.height = 5.8
+)
+```
+
+```{r packages, include=FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(plotly)
+library(MASS)
+library(scales)
+```
+
+# Buenos días
+
+Buenos días. En la clase anterior estudiamos la distribución normal multivariante y vimos que una nube de datos no se distribuye necesariamente de forma circular, sino que puede adoptar una forma elíptica. Esa elipse no era un elemento decorativo: representaba la estructura de covarianza de los datos. Aprendimos que el vector de medias define el centro, que la matriz de covarianza define la forma, la orientación y la dispersión, y que la distancia de Mahalanobis permite medir alejamiento estadístico respetando esa geometría.
+
+Hoy vamos a tomar esa misma idea y llevarla al siguiente nivel. Si la matriz de covarianza define la forma de los datos, entonces podemos preguntarnos: ¿cuáles son las direcciones principales de esa forma? ¿En qué dirección se concentra la mayor variabilidad? ¿Podemos representar muchos datos usando menos dimensiones sin perder demasiada información? Esa es precisamente la pregunta que responde el **Análisis de Componentes Principales**, conocido como PCA por sus siglas en inglés: **Principal Component Analysis**.
+
+# Propósito de la clase
+
+El propósito de esta clase es comprender PCA no como una función de R, ni como un botón automático de software, sino como una técnica geométrica, algebraica y estadística para transformar variables originales en nuevas variables llamadas componentes principales. Estas componentes son combinaciones lineales de las variables originales y se construyen de tal forma que la primera explica la mayor cantidad posible de variabilidad, la segunda explica la mayor cantidad restante, y así sucesivamente.
+
+La idea central puede resumirse así: PCA no cambia los datos en su esencia, sino la forma en que los miramos. En lugar de observar los datos desde los ejes originales, PCA rota el sistema de coordenadas para alinearlo con las direcciones naturales de variación. Esta rotación permite simplificar la estructura, detectar patrones, reducir dimensiones, visualizar datos complejos y preparar información para técnicas posteriores de análisis multivariante, minería de datos y aprendizaje automático.
+
+# Objetivos de aprendizaje
+
+Al finalizar la clase, el estudiante estará en capacidad de:
+
+- Explicar intuitivamente qué problema resuelve PCA.
+- Relacionar PCA con la matriz de covarianza y la geometría de una nube de datos.
+- Interpretar autovalores y autovectores dentro del análisis de componentes principales.
+- Comprender la diferencia entre variables originales y componentes principales.
+- Calcular PCA en R usando `prcomp`.
+- Interpretar varianza explicada, scree plot, scores, loadings y biplot.
+- Decidir cuántas componentes conservar.
+- Conectar PCA con reducción de dimensionalidad, visualización y análisis posterior.
+
+# Conexión con la clase anterior: de la elipse a PCA
+
+En la clase anterior vimos una nube de puntos con forma elíptica. Esa elipse tenía una dirección larga y una dirección corta. La dirección larga representaba la dirección en la cual los datos variaban más, mientras que la dirección corta representaba una dirección con menor variabilidad. Esa observación visual nos da la intuición completa de PCA: la primera componente principal apunta hacia el eje largo de la elipse y la segunda componente principal apunta hacia el eje corto.
+
+Dicho de otra manera, si tenemos una nube de datos inclinada, los ejes tradicionales $X_1$ y $X_2$ pueden no ser los mejores para describirla. PCA propone un nuevo sistema de coordenadas, rotado, donde el primer eje queda alineado con la máxima variabilidad y el segundo eje queda perpendicular al primero. Esta transformación es especialmente útil porque permite representar la mayor cantidad de información posible usando menos dimensiones.
+
+# Problema motivador
+
+Supongamos que tenemos un conjunto de datos con muchas variables numéricas: ingresos, edad, consumo, puntajes, tiempos, mediciones físicas, indicadores sociales o variables académicas. Es común que algunas de esas variables estén correlacionadas. Cuando dos variables están altamente correlacionadas, parte de la información se repite. Por ejemplo, en un conjunto de datos de estudiantes, las horas de estudio, el promedio y el número de créditos aprobados pueden estar relacionados. En un conjunto de datos financieros, ingresos, capacidad de pago y consumo mensual también pueden moverse conjuntamente.
+
+El problema es que, cuando hay muchas variables correlacionadas, interpretar el sistema completo se vuelve difícil. PCA ayuda a reorganizar esa información. En lugar de trabajar con todas las variables originales, crea nuevas variables que resumen patrones globales. La primera componente puede capturar un “perfil general” de variabilidad, la segunda puede capturar una diferencia secundaria, y así sucesivamente. Por eso PCA es una herramienta de reducción de dimensionalidad, pero también una herramienta de interpretación estructural.
+
+# Intuición geométrica: la nube tiene una dirección natural
+
+Primero generaremos una nube de datos bivariada con correlación positiva. La idea es observar que los datos no se dispersan de forma circular, sino que siguen una dirección inclinada. Esa dirección será precisamente la que PCA identificará como primera componente principal.
+
+```{r sim-datos-pca}
+set.seed(123)
+
+Sigma <- matrix(c(
+  1.0, 0.85,
+  0.85, 1.2
+), nrow = 2, byrow = TRUE)
+
+datos <- MASS::mvrnorm(n = 600, mu = c(0, 0), Sigma = Sigma)
+
+df <- data.frame(
+  X1 = datos[, 1],
+  X2 = datos[, 2]
+)
+
+head(df)
+```
+
+```{r grafico-nube-original}
+g_original <- ggplot(df, aes(X1, X2)) +
+  geom_point(alpha = 0.45, size = 1.6) +
+  stat_ellipse(type = "norm", linewidth = 1.1) +
+  coord_equal() +
+  labs(
+    title = "Nube de datos original",
+    subtitle = "La elipse muestra una dirección natural de máxima variabilidad",
+    x = "X1",
+    y = "X2"
+  ) +
+  theme_minimal(base_size = 13)
+
+g_original
+plotly::ggplotly(g_original)
+```
+
+La nube de puntos muestra una estructura inclinada. Esto significa que las variables $X_1$ y $X_2$ no son independientes en sentido lineal: cuando una aumenta, la otra tiende a aumentar también. La elipse resume esa relación. Su eje largo indica la dirección donde la dispersión de los datos es mayor. Su eje corto indica una dirección donde los datos varían menos. Esta lectura geométrica es fundamental porque PCA se construye exactamente sobre esta idea.
+
+Aquí es importante decirle al estudiante que PCA no aparece como una técnica aislada. Nace de observar la forma de los datos. Si la nube está inclinada, entonces los ejes originales no están alineados con la estructura real del fenómeno. PCA propone una rotación: en vez de mirar la nube desde $X_1$ y $X_2$, la miramos desde nuevos ejes llamados $PC1$ y $PC2$. El eje $PC1$ apunta hacia donde los datos más varían; el eje $PC2$ apunta hacia una dirección perpendicular que captura la variabilidad restante.
+
+# Estandarización: por qué suele ser necesaria
+
+Antes de aplicar PCA, es necesario decidir si se trabajará con la matriz de covarianza o con la matriz de correlación. Si las variables están medidas en escalas comparables, puede usarse covarianza. Pero si las variables tienen unidades muy diferentes, por ejemplo pesos, años, centímetros, porcentajes o puntajes, la variable con mayor escala dominará el análisis. Para evitarlo, se recomienda estandarizar.
+
+Estandarizar significa transformar cada variable para que tenga media cero y desviación estándar uno:
+
+$$
+Z_j = \frac{X_j - \bar{X}_j}{s_j}
+$$
+
+Esta transformación no elimina la estructura de relación entre variables, pero sí evita que una variable domine por estar medida en unidades más grandes. Cuando PCA se aplica sobre datos estandarizados, equivale a aplicar PCA sobre la matriz de correlaciones. En cursos aplicados, esta decisión debe explicarse claramente porque muchos errores de interpretación nacen de aplicar PCA sin revisar previamente las escalas.
+
+```{r estandarizacion}
+df_scaled <- as.data.frame(scale(df))
+
+summary(df_scaled)
+cov(df_scaled)
+cor(df_scaled)
+```
+
+# Formalización matemática de PCA
+
+Sea $\mathbf{X}$ un vector de variables centradas. PCA busca construir nuevas variables $Z_1, Z_2, \dots, Z_p$ llamadas componentes principales. Cada componente es una combinación lineal de las variables originales:
+
+$$
+Z_1 = a_{11}X_1 + a_{12}X_2 + \cdots + a_{1p}X_p
+$$
+
+En forma vectorial:
+
+$$
+Z_1 = \mathbf{a}_1^T\mathbf{X}
+$$
+
+La primera componente principal se elige para que tenga la mayor varianza posible, bajo la restricción de que el vector de pesos tenga norma uno:
+
+$$
+\max_{\mathbf{a}_1} Var(\mathbf{a}_1^T\mathbf{X})
+$$
+
+sujeto a:
+
+$$
+\mathbf{a}_1^T\mathbf{a}_1 = 1
+$$
+
+Esta restricción es necesaria porque, si no se impone, podríamos aumentar artificialmente la varianza multiplicando los pesos por números cada vez más grandes. El problema estadístico real no consiste en agrandar la escala, sino en encontrar una dirección. Por eso se exige que el vector de pesos tenga longitud uno. De esta forma, PCA busca la dirección del espacio donde la proyección de los datos tiene máxima variabilidad.
+
+Si $\Sigma$ es la matriz de covarianza de los datos, entonces:
+
+$$
+Var(\mathbf{a}^T\mathbf{X}) = \mathbf{a}^T \Sigma \mathbf{a}
+$$
+
+La solución de este problema conduce a la ecuación de autovalores y autovectores:
+
+$$
+\Sigma \mathbf{v} = \lambda \mathbf{v}
+$$
+
+Aquí aparece el corazón algebraico de PCA. Los autovectores $\mathbf{v}$ son las direcciones principales de variabilidad. Los autovalores $\lambda$ indican cuánta varianza hay en cada una de esas direcciones. Por tanto, PCA no es simplemente una técnica computacional: es una forma de leer la matriz de covarianza mediante álgebra lineal.
+
+# Autovalores y autovectores: interpretación estadística
+
+Los autovectores son los nuevos ejes del sistema de coordenadas. Si el primer autovector apunta en una dirección diagonal, eso significa que la mayor variación de los datos ocurre al combinar variables originales en esa dirección. El segundo autovector es perpendicular al primero y captura la mayor variabilidad restante. En general, los componentes principales son ortogonales entre sí, lo que significa que no están correlacionados.
+
+Los autovalores indican cuánta varianza explica cada componente. Si el primer autovalor es mucho mayor que los demás, entonces una sola componente captura gran parte de la estructura de los datos. Si los autovalores están repartidos de manera similar, entonces la información está más distribuida y no es tan fácil reducir dimensión. Esta idea será central para decidir cuántas componentes conservar.
+
+```{r eigen-manual}
+S <- cov(df_scaled)
+
+eig <- eigen(S)
+
+eig$values
+eig$vectors
+```
+
+```{r varianza-explicada-manual}
+var_exp <- eig$values / sum(eig$values)
+
+data.frame(
+  Componente = paste0("PC", seq_along(eig$values)),
+  Autovalor = eig$values,
+  Varianza_Explicada = var_exp,
+  Varianza_Acumulada = cumsum(var_exp)
+)
+```
+
+La tabla anterior permite leer PCA de forma directa. Cada autovalor representa la varianza explicada por una componente. La proporción de varianza explicada se obtiene dividiendo cada autovalor por la suma total de autovalores. La varianza acumulada permite decidir cuántas componentes conservar. Por ejemplo, si las dos primeras componentes explican más del 80% o 90% de la variabilidad, podría ser razonable trabajar con una representación reducida de dos dimensiones.
+
+# Dibujar los ejes principales sobre la nube
+
+Ahora vamos a visualizar los autovectores sobre la nube original. Esto permite ver que PCA encuentra exactamente las direcciones de la elipse.
+
+```{r grafico-autovectores}
+centro <- colMeans(df_scaled)
+df_scaled_plot <- df_scaled
+
+eig_scaled <- eigen(cov(df_scaled_plot))
+
+vectores <- data.frame(
+  x = centro[1],
+  y = centro[2],
+  xend = centro[1] + eig_scaled$vectors[1, ] * sqrt(eig_scaled$values) * 2.5,
+  yend = centro[2] + eig_scaled$vectors[2, ] * sqrt(eig_scaled$values) * 2.5,
+  Componente = c("PC1: máxima varianza", "PC2: varianza restante")
+)
+
+g_ejes <- ggplot(df_scaled_plot, aes(X1, X2)) +
+  geom_point(alpha = 0.40, size = 1.5) +
+  stat_ellipse(type = "norm", linewidth = 1.1) +
+  geom_segment(
+    data = vectores,
+    aes(x = x, y = y, xend = xend, yend = yend),
+    inherit.aes = FALSE,
+    arrow = arrow(length = unit(0.25, "cm")),
+    linewidth = 1.3
+  ) +
+  geom_point(aes(x = centro[1], y = centro[2]), size = 3) +
+  coord_equal() +
+  labs(
+    title = "PCA como rotación de los ejes",
+    subtitle = "PC1 se alinea con la dirección de máxima variabilidad; PC2 captura la variabilidad restante",
+    x = "X1 estandarizada",
+    y = "X2 estandarizada"
+  ) +
+  theme_minimal(base_size = 13)
+
+g_ejes
+plotly::ggplotly(g_ejes)
+```
+
+Este gráfico es uno de los más importantes de la clase. Permite afirmar que PCA no inventa una estructura nueva, sino que descubre los ejes naturales de la nube de datos. La primera flecha apunta hacia el eje largo de la elipse, porque esa es la dirección donde los datos tienen mayor varianza. La segunda flecha es perpendicular y representa la variabilidad que queda después de explicar la primera dirección.
+
+En términos docentes, esta visualización debe conectarse explícitamente con la clase anterior. Antes veíamos la elipse como forma de la matriz de covarianza. Ahora vemos que PCA toma esa elipse y encuentra sus ejes. Por eso una frase clave para la clase es: **la covarianza define la geometría; PCA encuentra los ejes de esa geometría**.
+
+# Scores y loadings
+
+En PCA aparecen dos conceptos fundamentales: **scores** y **loadings**. Los scores son las coordenadas de las observaciones en el nuevo sistema de componentes principales. Es decir, cada dato original se proyecta sobre los nuevos ejes $PC1$, $PC2$, etc. Los loadings son los pesos o coeficientes que indican cómo se construye cada componente a partir de las variables originales.
+
+Dicho de forma sencilla: los scores describen dónde quedan los individuos después de la rotación, mientras que los loadings explican cómo se relacionan las variables originales con las componentes. Esta distinción es muy importante porque evita confundir observaciones con variables. En un gráfico PCA, los puntos suelen representar observaciones y las flechas suelen representar variables.
+
+# PCA con `prcomp` en R
+
+Aplicaremos PCA usando la función `prcomp`, que es una de las formas más recomendadas en R. Usaremos primero los datos simulados y luego un dataset real clásico: `iris`.
+
+```{r pca-simulado}
+pca_sim <- prcomp(df, center = TRUE, scale. = TRUE)
+
+summary(pca_sim)
+pca_sim$rotation
+head(pca_sim$x)
+```
+
+La salida de `summary(pca_sim)` muestra la desviación estándar de cada componente, la proporción de varianza explicada y la varianza acumulada. La matriz `rotation` contiene los loadings, es decir, los pesos de cada variable original en cada componente. El objeto `pca_sim$x` contiene los scores, es decir, las observaciones proyectadas sobre los nuevos ejes.
+
+# Visualización de los datos transformados
+
+```{r grafico-scores-simulado}
+scores_sim <- as.data.frame(pca_sim$x)
+
+g_scores <- ggplot(scores_sim, aes(PC1, PC2)) +
+  geom_point(alpha = 0.45, size = 1.6) +
+  stat_ellipse(type = "norm", linewidth = 1.1) +
+  coord_equal() +
+  labs(
+    title = "Datos proyectados en componentes principales",
+    subtitle = "Después de PCA, los ejes quedan alineados con las direcciones de variabilidad",
+    x = "PC1",
+    y = "PC2"
+  ) +
+  theme_minimal(base_size = 13)
+
+g_scores
+plotly::ggplotly(g_scores)
+```
+
+En este gráfico los datos ya no se muestran en los ejes originales $X_1$ y $X_2$, sino en los nuevos ejes $PC1$ y $PC2$. La diferencia clave es que ahora la nube queda alineada con los ejes principales. Esto representa la rotación del sistema de coordenadas. La primera componente concentra la mayor variabilidad, mientras que la segunda conserva la variabilidad restante. En dos dimensiones no hay reducción todavía, pero sí hay transformación. La reducción ocurre cuando decidimos conservar sólo algunas componentes.
+
+# Reducción de dimensionalidad
+
+La reducción de dimensionalidad consiste en conservar sólo las primeras $k$ componentes principales, con $k < p$. Esta decisión se justifica cuando las primeras componentes explican una proporción alta de la varianza total. Por ejemplo, si tenemos 20 variables originales y las primeras 3 componentes explican el 85% de la variabilidad, podemos representar los datos en 3 dimensiones perdiendo sólo una parte relativamente pequeña de información.
+
+Es importante aclarar que PCA no “borra” variables al azar. Lo que hace es construir nuevas variables ordenadas por importancia estadística. La primera componente es la más informativa en términos de varianza, la segunda es la más informativa después de quitar la primera, y así sucesivamente. Por eso PCA es una técnica de compresión de información.
+
+# Scree plot
+
+El scree plot muestra la varianza explicada por cada componente. Es una herramienta visual para decidir cuántas componentes conservar.
+
+```{r scree-simulado}
+var_sim <- (pca_sim$sdev^2) / sum(pca_sim$sdev^2)
+
+df_var_sim <- data.frame(
+  Componente = paste0("PC", seq_along(var_sim)),
+  Varianza = var_sim,
+  Acumulada = cumsum(var_sim)
+)
+
+ggplot(df_var_sim, aes(Componente, Varianza)) +
+  geom_col() +
+  geom_line(aes(y = Acumulada, group = 1), linewidth = 1.1) +
+  geom_point(aes(y = Acumulada), size = 3) +
+  scale_y_continuous(labels = percent_format()) +
+  labs(
+    title = "Scree plot y varianza acumulada",
+    subtitle = "Las primeras componentes concentran la mayor parte de la información",
+    x = "Componente principal",
+    y = "Proporción de varianza"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+En el scree plot se busca identificar cuántas componentes aportan realmente información sustancial. Una regla visual común es observar el “codo” de la gráfica: el punto a partir del cual agregar más componentes produce ganancias pequeñas. Otra regla práctica es conservar suficientes componentes para alcanzar cierto porcentaje de varianza acumulada, por ejemplo 80%, 85% o 90%. Sin embargo, la decisión final también debe depender del contexto del problema.
+
+# PCA con datos reales: iris
+
+Ahora aplicaremos PCA al dataset `iris`, que contiene mediciones de flores de tres especies. Las variables son: largo y ancho del sépalo, largo y ancho del pétalo. Aunque es un dataset clásico, sigue siendo útil para explicar PCA porque permite mostrar cómo las componentes principales pueden separar estructuras naturales en los datos.
+
+```{r iris-data}
+data(iris)
+
+X_iris <- iris[, 1:4]
+
+head(iris)
+summary(X_iris)
+```
+
+```{r iris-cor}
+cor(X_iris)
+```
+
+La matriz de correlación muestra que varias variables están relacionadas, especialmente las asociadas al pétalo. Esto justifica el uso de PCA, porque cuando hay correlación entre variables, existe redundancia parcial de información. PCA puede reorganizar esa información en un número menor de componentes.
+
+```{r pca-iris}
+pca_iris <- prcomp(X_iris, center = TRUE, scale. = TRUE)
+
+summary(pca_iris)
+pca_iris$rotation
+```
+
+# Interpretación de varianza explicada en iris
+
+```{r iris-varianza}
+var_iris <- (pca_iris$sdev^2) / sum(pca_iris$sdev^2)
+
+df_var_iris <- data.frame(
+  Componente = paste0("PC", seq_along(var_iris)),
+  Varianza = var_iris,
+  Acumulada = cumsum(var_iris)
+)
+
+df_var_iris
+```
+
+```{r iris-scree}
+ggplot(df_var_iris, aes(Componente, Varianza)) +
+  geom_col() +
+  geom_line(aes(y = Acumulada, group = 1), linewidth = 1.1) +
+  geom_point(aes(y = Acumulada), size = 3) +
+  scale_y_continuous(labels = percent_format()) +
+  labs(
+    title = "PCA en iris: varianza explicada",
+    subtitle = "La varianza acumulada ayuda a decidir cuántas componentes conservar",
+    x = "Componente principal",
+    y = "Proporción de varianza"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+En este caso, normalmente las primeras dos componentes explican una proporción muy alta de la variabilidad total. Esto significa que podemos visualizar un dataset de cuatro variables en un plano bidimensional conservando gran parte de la información. Esta es una de las fortalezas de PCA: permite pasar de muchas variables a pocas dimensiones interpretables.
+
+# Visualización de scores en iris
+
+```{r iris-scores}
+scores_iris <- as.data.frame(pca_iris$x)
+scores_iris$Species <- iris$Species
+
+g_iris_scores <- ggplot(scores_iris, aes(PC1, PC2, color = Species)) +
+  geom_point(size = 2.5, alpha = 0.85) +
+  labs(
+    title = "Iris proyectado sobre las dos primeras componentes principales",
+    subtitle = "Cada punto es una flor; el color representa la especie",
+    x = "PC1",
+    y = "PC2",
+    color = "Especie"
+  ) +
+  theme_minimal(base_size = 13)
+
+g_iris_scores
+plotly::ggplotly(g_iris_scores)
+```
+
+Este gráfico muestra cómo las observaciones se distribuyen en el nuevo espacio de componentes principales. La primera componente suele capturar diferencias globales asociadas al tamaño y estructura del pétalo, mientras que la segunda captura una variación secundaria. Al colorear por especie, se observa que PCA puede revelar separación entre grupos incluso sin haber usado la variable de especie para construir el modelo. Esto es importante: PCA es una técnica no supervisada. No usa etiquetas de clase; sólo usa las variables numéricas.
+
+La separación visual entre especies no significa que PCA sea un clasificador por sí mismo. PCA no aprende reglas de clasificación. Lo que hace es transformar el espacio para que las direcciones principales de variación sean visibles. Luego, sobre ese espacio transformado, podrían aplicarse técnicas de clasificación, clustering o análisis exploratorio.
+
+# Loadings: cómo interpretar las variables
+
+Los loadings indican cuánto contribuye cada variable original a cada componente. Valores positivos o negativos grandes indican que la variable tiene un peso importante en la componente. El signo debe interpretarse con cuidado: el signo de una componente puede invertirse sin cambiar el sentido estadístico del PCA. Por eso lo importante no es sólo si el valor es positivo o negativo, sino la magnitud y el patrón relativo entre variables.
+
+```{r loadings-iris}
+loadings_iris <- as.data.frame(pca_iris$rotation)
+loadings_iris$Variable <- rownames(loadings_iris)
+
+loadings_iris
+```
+
+```{r grafico-loadings}
+loadings_long <- loadings_iris |>
+  tidyr::pivot_longer(cols = starts_with("PC"), names_to = "Componente", values_to = "Loading")
+
+ggplot(loadings_long |> filter(Componente %in% c("PC1", "PC2")),
+       aes(Variable, Loading, fill = Componente)) +
+  geom_col(position = "dodge") +
+  coord_flip() +
+  labs(
+    title = "Loadings de las dos primeras componentes",
+    subtitle = "Los loadings muestran cómo cada variable aporta a cada componente",
+    x = "Variable original",
+    y = "Loading"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+Este gráfico ayuda a interpretar el significado de las componentes. Si una componente tiene loadings altos en variables relacionadas con pétalos, puede interpretarse como una dimensión asociada a características del pétalo. Si otra componente contrasta variables de sépalo contra variables de pétalo, puede interpretarse como una dimensión de diferenciación morfológica. En PCA, la interpretación siempre debe hacerse mirando los loadings, no solamente los scores.
+
+# Biplot: observaciones y variables en el mismo plano
+
+Un biplot combina dos elementos: los scores de las observaciones y las direcciones de las variables originales. Los puntos representan individuos u observaciones; las flechas representan variables. La dirección de una flecha indica hacia dónde aumenta esa variable, y la longitud aproximada indica qué tan bien queda representada en el plano.
+
+```{r biplot-manual}
+scores_2d <- scores_iris[, c("PC1", "PC2", "Species")]
+
+loadings_2d <- as.data.frame(pca_iris$rotation[, 1:2])
+loadings_2d$Variable <- rownames(loadings_2d)
+
+factor_flechas <- 3
+
+ggplot(scores_2d, aes(PC1, PC2, color = Species)) +
+  geom_point(size = 2.3, alpha = 0.80) +
+  geom_segment(
+    data = loadings_2d,
+    aes(x = 0, y = 0, xend = PC1 * factor_flechas, yend = PC2 * factor_flechas),
+    inherit.aes = FALSE,
+    arrow = arrow(length = unit(0.25, "cm")),
+    linewidth = 1.1
+  ) +
+  geom_text(
+    data = loadings_2d,
+    aes(x = PC1 * factor_flechas * 1.1, y = PC2 * factor_flechas * 1.1, label = Variable),
+    inherit.aes = FALSE,
+    size = 4
+  ) +
+  labs(
+    title = "Biplot PCA: observaciones y variables",
+    subtitle = "Puntos = flores; flechas = variables originales proyectadas",
+    x = "PC1",
+    y = "PC2",
+    color = "Especie"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+El biplot debe interpretarse con cuidado. Los puntos cercanos entre sí representan observaciones con perfiles similares en términos de las variables originales. Las flechas que apuntan en direcciones similares representan variables positivamente relacionadas. Flechas casi opuestas sugieren relación negativa. Flechas aproximadamente perpendiculares sugieren relación débil. Además, si un grupo de puntos se ubica en la dirección de una flecha, significa que ese grupo tiende a tener valores altos en esa variable.
+
+Este gráfico es muy poderoso para clase porque integra individuos, variables, correlación y reducción de dimensionalidad en una sola visualización. Sin embargo, es importante advertir que un biplot de dos dimensiones sólo muestra la información capturada por PC1 y PC2. Si estas componentes explican poca varianza, el biplot puede ser incompleto o engañoso. Por eso siempre debe analizarse junto con la varianza explicada.
+
+# Cuántas componentes conservar
+
+No existe una única regla absoluta para decidir cuántas componentes conservar. Hay varios criterios prácticos:
+
+- Conservar componentes hasta alcanzar un porcentaje acumulado de varianza, por ejemplo 80%, 85% o 90%.
+- Usar el criterio del codo en el scree plot.
+- Conservar componentes con autovalores mayores que 1 cuando se trabaja con variables estandarizadas.
+- Considerar la interpretabilidad de las componentes.
+- Considerar el propósito del análisis: visualización, compresión, modelamiento o preprocesamiento.
+
+En un contexto docente, lo más importante es que el estudiante no elija componentes de manera mecánica. Debe justificar la decisión. Si el objetivo es visualizar, pueden bastar dos componentes aunque no capturen toda la varianza. Si el objetivo es construir un modelo predictivo, podría convenir conservar más componentes. Si el objetivo es interpretar dimensiones latentes, se debe revisar si las componentes tienen sentido conceptual.
+
+# PCA no supervisado: advertencia importante
+
+PCA es una técnica no supervisada. Esto significa que no utiliza una variable objetivo o etiqueta de clase para construir las componentes. En el caso de iris, la especie se usa sólo para colorear el gráfico después de aplicar PCA, pero no interviene en el cálculo. Esta distinción es muy importante porque PCA no busca separar clases, sino maximizar varianza. A veces la dirección de máxima varianza coincide con una separación útil entre grupos, pero no siempre ocurre.
+
+Por eso, si el objetivo principal es clasificación, PCA puede ser una etapa de preprocesamiento, pero no reemplaza a modelos supervisados como regresión logística, árboles de decisión, SVM o análisis discriminante. PCA ayuda a resumir y transformar variables; la clasificación requiere aprender una relación con una variable objetivo.
+
+# Limitaciones de PCA
+
+Aunque PCA es una técnica poderosa, tiene limitaciones claras. Primero, es una técnica lineal: sólo captura combinaciones lineales de las variables. Si la estructura de los datos es no lineal, PCA puede no representar adecuadamente el patrón. Segundo, las componentes pueden ser difíciles de interpretar cuando combinan muchas variables sin un sentido conceptual claro. Tercero, PCA es sensible a escalas y a valores atípicos, por lo que requiere una revisión cuidadosa de los datos antes de aplicarlo.
+
+Además, PCA maximiza varianza, pero la mayor varianza no siempre equivale a mayor relevancia para un problema específico. Una dirección con mucha variabilidad puede no ser útil para explicar una variable objetivo, y una dirección con poca variabilidad puede ser importante para separar grupos. Por eso PCA debe usarse con criterio estadístico y conocimiento del dominio.
+
+# Actividad guiada en clase
+
+## Parte A: interpretación conceptual
+
+Responda en grupos:
+
+1. ¿Qué problema resuelve PCA?
+2. ¿Por qué PCA se relaciona con la matriz de covarianza?
+3. ¿Qué representa un autovector en PCA?
+4. ¿Qué representa un autovalor?
+5. ¿Cuál es la diferencia entre scores y loadings?
+6. ¿Por qué es importante estandarizar variables antes de PCA?
+7. ¿PCA es una técnica supervisada o no supervisada? Justifique.
+
+## Parte B: ejercicio práctico
+
+Use el dataset `iris` y responda:
+
+1. ¿Cuánta varianza explica PC1?
+2. ¿Cuánta varianza explican PC1 y PC2 juntas?
+3. ¿Qué variables tienen mayor peso en PC1?
+4. ¿Qué variables tienen mayor peso en PC2?
+5. ¿Se observan grupos separados en el plano PC1-PC2?
+6. ¿Cuántas componentes conservaría y por qué?
+
+```{r actividad-final}
+# Actividad práctica para estudiantes
+
+data(iris)
+
+X <- iris[, 1:4]
+
+pca <- prcomp(X, center = TRUE, scale. = TRUE)
+
+summary(pca)
+pca$rotation
+
+scores <- as.data.frame(pca$x)
+scores$Species <- iris$Species
+
+ggplot(scores, aes(PC1, PC2, color = Species)) +
+  geom_point(size = 2.5, alpha = 0.85) +
+  theme_minimal() +
+  labs(
+    title = "Actividad: PCA sobre iris",
+    x = "PC1",
+    y = "PC2"
+  )
+```
+
+# Guion docente de cierre
+
+Para cerrar la clase, se puede decir:
+
+“Hoy vimos que PCA no es simplemente una función de R. PCA es una forma de reorganizar la información de un conjunto de datos. Parte de la matriz de covarianza o correlación, encuentra las direcciones donde los datos más varían y construye nuevas variables llamadas componentes principales. Estas componentes permiten reducir dimensionalidad, visualizar datos complejos y preparar información para análisis posteriores.”
+
+“Lo más importante es entender que PCA rota el espacio. No cambia los individuos ni inventa datos nuevos. Cambia el sistema de referencia para mirar la información desde sus direcciones más importantes. Por eso PCA conecta directamente con lo que vimos en la normal multivariante: la elipse tenía ejes naturales, y PCA encuentra esos ejes.”
+
+# Resumen final
+
+- PCA transforma variables originales en componentes principales.
+- Las componentes son combinaciones lineales de las variables.
+- PC1 explica la mayor varianza posible.
+- PC2 explica la mayor varianza restante y es ortogonal a PC1.
+- Los autovectores definen direcciones.
+- Los autovalores indican varianza explicada.
+- Los scores son observaciones proyectadas.
+- Los loadings son pesos de las variables.
+- PCA es útil para reducción de dimensionalidad, visualización y exploración.
+- PCA debe interpretarse junto con contexto, escalas, varianza explicada y loadings.
+
+# Próxima clase sugerida
+
+La siguiente clase natural puede avanzar hacia uno de estos dos caminos:
+
+1. **Inferencia multivariante**, usando lo visto sobre normal multivariante, covarianza y regiones de confianza.
+2. **Análisis factorial**, comparando componentes principales con factores latentes.
+
+Si se desea seguir la ruta aplicada, conviene pasar a análisis factorial. Si se desea seguir la ruta estadística formal, conviene pasar a inferencia multivariante.

@@ -1,0 +1,504 @@
+---
+title: "Estadística Multidimensional: Inferencia Multivariante"
+subtitle: "Mahalanobis, regiones de confianza, chi-cuadrado y prueba T² de Hotelling"
+author: "Universidad Distrital Francisco José de Caldas"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: cosmo
+    df_print: paged
+    code_folding: hide
+    fig_width: 9
+    fig_height: 5.8
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 9,
+  fig.height = 5.8
+)
+```
+
+```{r packages, include=FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(MASS)
+library(plotly)
+library(scales)
+```
+
+# Buenos días
+
+Buenos días. En las clases anteriores construimos una base sólida para entender datos multidimensionales: variables aleatorias multivariantes, distribución conjunta, distribución normal multivariante, matriz de covarianza, geometría elíptica, distancia de Mahalanobis y análisis de componentes principales. Hasta este punto hemos aprendido a describir, visualizar, transformar e interpretar datos con varias variables al mismo tiempo.
+
+En esta clase damos un paso conceptual muy importante: pasamos del análisis descriptivo al análisis inferencial. Es decir, ya no nos interesa únicamente observar cómo se ven los datos, sino tomar decisiones estadísticas sobre ellos. En estadística univariada, la inferencia suele centrarse en medias, varianzas, intervalos de confianza y pruebas de hipótesis. En estadística multivariante, estas ideas se extienden a vectores de medias, matrices de covarianza, regiones de confianza, distancias estadísticas y pruebas multivariantes como la T² de Hotelling.
+
+# Propósito de la clase
+
+El propósito de esta clase es que el estudiante entienda cómo se realiza inferencia cuando el objeto de estudio no es una sola variable sino un conjunto de variables relacionadas. Esto implica cambiar la forma de pensar: en lugar de preguntar únicamente si una media es alta o baja, preguntamos si un vector completo de medias es compatible con una hipótesis. En lugar de preguntar si un dato está lejos en una sola variable, preguntamos si una observación es inusual considerando simultáneamente todas sus dimensiones.
+
+La inferencia multivariante se apoya en varios conceptos que ya hemos trabajado. La matriz de covarianza permite entender la forma de los datos; la distancia de Mahalanobis permite medir alejamiento estadístico respetando esa forma; la distribución chi-cuadrado permite convertir esa distancia en una regla de decisión; y las regiones elípticas permiten visualizar zonas de confianza. Esta clase conecta todos esos elementos en un marco inferencial.
+
+# Objetivos de aprendizaje
+
+Al finalizar esta clase, el estudiante estará en capacidad de:
+
+- Diferenciar análisis descriptivo multivariante e inferencia multivariante.
+- Interpretar el vector de medias muestral y la matriz de covarianza muestral.
+- Calcular e interpretar distancias de Mahalanobis.
+- Relacionar la distancia de Mahalanobis con la distribución chi-cuadrado.
+- Construir regiones de confianza y regiones de detección de atípicos.
+- Comprender la lógica de una prueba multivariante de hipótesis.
+- Introducir la prueba T² de Hotelling como extensión multivariante de la prueba t.
+- Aplicar estos conceptos en R con datos simulados y datos reales.
+
+# De lo descriptivo a lo inferencial
+
+En análisis descriptivo observamos los datos y los resumimos mediante gráficos, medias, covarianzas, correlaciones, elipses y componentes principales. Estas herramientas nos ayudan a entender la estructura de la información disponible. Sin embargo, la inferencia estadística busca ir más allá de la muestra. Su objetivo es responder preguntas sobre una población a partir de datos observados.
+
+En el caso univariado, una pregunta típica sería: ¿la media poblacional de una variable es igual a cierto valor? En el caso multivariante, la pregunta cambia: ¿el vector completo de medias poblacionales es igual a un vector hipotético? Esta diferencia es profunda porque las variables no se analizan de manera aislada. La inferencia multivariante reconoce que las variables pueden estar correlacionadas y que esa dependencia debe incorporarse en la decisión estadística.
+
+# Vector de medias y matriz de covarianza muestral
+
+Supongamos que observamos `n` individuos y medimos `p` variables en cada uno. Cada observación puede escribirse como un vector:
+
+$$
+\mathbf{x}_i =
+\begin{pmatrix}
+x_{i1} \\
+x_{i2} \\
+\vdots \\
+x_{ip}
+\end{pmatrix}
+$$
+
+El vector de medias muestral se define como:
+
+$$
+\bar{\mathbf{x}} =
+\frac{1}{n}
+\sum_{i=1}^{n}
+\mathbf{x}_i
+$$
+
+La matriz de covarianza muestral se define como:
+
+$$
+S =
+\frac{1}{n-1}
+\sum_{i=1}^{n}
+(\mathbf{x}_i-\bar{\mathbf{x}})
+(\mathbf{x}_i-\bar{\mathbf{x}})^T
+$$
+
+El vector de medias muestral resume la localización central de los datos en el espacio multidimensional. Si tenemos dos variables, este vector indica el centro de la nube de puntos en el plano; si tenemos diez variables, indica el centro en un espacio de diez dimensiones. La matriz de covarianza muestral resume la dispersión y dependencia entre variables. Sus elementos diagonales son varianzas y sus elementos fuera de la diagonal son covarianzas.
+
+Desde el punto de vista inferencial, estos dos objetos son estimadores de parámetros poblacionales. El vector $\bar{\mathbf{x}}$ estima el vector de medias poblacional $\boldsymbol{\mu}$, y la matriz $S$ estima la matriz de covarianza poblacional $\Sigma$. Por tanto, la inferencia multivariante se construye sobre la pregunta: ¿qué tan compatible es lo que observamos en la muestra con una hipótesis sobre $\boldsymbol{\mu}$ y $\Sigma$?
+
+# Simulación base: datos normales bivariantes
+
+Primero trabajaremos con un ejemplo simulado para controlar la estructura de la población. Generaremos una muestra bivariada con correlación positiva. Esto nos permitirá visualizar el papel de la matriz de covarianza y preparar el terreno para Mahalanobis y regiones de confianza.
+
+```{r simular-datos}
+set.seed(123)
+
+mu <- c(0, 0)
+
+Sigma <- matrix(c(
+  1.0, 0.75,
+  0.75, 1.5
+), nrow = 2, byrow = TRUE)
+
+X <- MASS::mvrnorm(n = 250, mu = mu, Sigma = Sigma)
+
+df <- data.frame(
+  X1 = X[,1],
+  X2 = X[,2]
+)
+
+head(df)
+```
+
+```{r resumen-muestral}
+media_muestral <- colMeans(df)
+cov_muestral <- cov(df)
+cor_muestral <- cor(df)
+
+media_muestral
+cov_muestral
+cor_muestral
+```
+
+Los resultados muestran una media muestral cercana al vector poblacional utilizado para simular los datos y una matriz de covarianza cercana a la matriz teórica. Debido al azar muestral, no esperamos coincidencia exacta. Esta diferencia entre población y muestra es precisamente la razón por la cual necesitamos inferencia estadística.
+
+# Visualización de la nube y elipse
+
+```{r grafico-nube}
+g_nube <- ggplot(df, aes(X1, X2)) +
+  geom_point(alpha = 0.55, size = 1.8) +
+  stat_ellipse(type = "norm", level = 0.95, linewidth = 1.1) +
+  geom_point(aes(x = media_muestral[1], y = media_muestral[2]), size = 3) +
+  labs(
+    title = "Nube de datos bivariada con elipse normal al 95%",
+    subtitle = "La elipse representa una región aproximada de concentración bajo normalidad",
+    x = "X1",
+    y = "X2"
+  ) +
+  theme_minimal(base_size = 13)
+
+g_nube
+plotly::ggplotly(g_nube)
+```
+
+La elipse muestra una región donde se espera encontrar una gran proporción de los datos bajo el supuesto de normalidad multivariante. La inclinación de la elipse refleja la covarianza positiva entre las variables. Esta visualización conecta directamente con lo visto anteriormente: la covarianza no es sólo un número, sino una propiedad geométrica de los datos.
+
+# Distancia de Mahalanobis
+
+La distancia euclídea mide qué tan lejos está un punto del centro usando una idea geométrica ordinaria. Sin embargo, en datos multivariantes esa distancia puede ser engañosa, porque no considera la escala de cada variable ni la correlación entre ellas. La distancia de Mahalanobis corrige este problema incorporando la matriz de covarianza.
+
+La distancia cuadrada de Mahalanobis de una observación $\mathbf{x}$ respecto a un centro $\boldsymbol{\mu}$ es:
+
+$$
+D_M^2(\mathbf{x}) =
+(\mathbf{x}-\boldsymbol{\mu})^T
+\Sigma^{-1}
+(\mathbf{x}-\boldsymbol{\mu})
+$$
+
+Cuando usamos datos muestrales, reemplazamos $\boldsymbol{\mu}$ por $\bar{\mathbf{x}}$ y $\Sigma$ por $S$.
+
+```{r calcular-mahalanobis}
+df$D2_Mahalanobis <- mahalanobis(
+  x = df[, c("X1", "X2")],
+  center = media_muestral,
+  cov = cov_muestral
+)
+
+df$Dist_Euclidea <- sqrt(
+  (df$X1 - media_muestral[1])^2 +
+  (df$X2 - media_muestral[2])^2
+)
+
+head(df)
+```
+
+```{r grafico-mahalanobis}
+g_mah <- ggplot(df, aes(X1, X2, color = D2_Mahalanobis)) +
+  geom_point(size = 2, alpha = 0.85) +
+  stat_ellipse(aes(color = NULL), type = "norm", level = 0.95, linewidth = 1.1) +
+  scale_color_viridis_c(option = "C") +
+  labs(
+    title = "Distancia de Mahalanobis",
+    subtitle = "El color indica alejamiento estadístico respecto al centro y la covarianza",
+    x = "X1",
+    y = "X2",
+    color = "D² Mahalanobis"
+  ) +
+  theme_minimal(base_size = 13)
+
+g_mah
+plotly::ggplotly(g_mah)
+```
+
+En el gráfico, los colores más intensos representan puntos con mayor distancia de Mahalanobis. Estos puntos se encuentran en regiones menos compatibles con la estructura general de los datos. Esta visualización ayuda a comprender por qué Mahalanobis es una medida más adecuada que la distancia euclídea en contextos multivariantes.
+
+# Relación con la distribución chi-cuadrado
+
+Bajo el supuesto de normalidad multivariante, si $\mathbf{X} \sim N_p(\boldsymbol{\mu}, \Sigma)$, entonces la distancia cuadrada de Mahalanobis sigue una distribución chi-cuadrado con `p` grados de libertad:
+
+$$
+D_M^2 \sim \chi^2_p
+$$
+
+Esta relación es fundamental porque transforma una distancia geométrica en una herramienta inferencial. Si conocemos la distribución teórica de la distancia, podemos definir umbrales. Por ejemplo, en dos dimensiones, el percentil 95 de una chi-cuadrado con 2 grados de libertad define una frontera. Observaciones con distancia superior a ese umbral pueden considerarse candidatas a atípicos multivariantes.
+
+```{r umbrales-chi}
+p <- 2
+
+umbral_95 <- qchisq(0.95, df = p)
+umbral_99 <- qchisq(0.99, df = p)
+
+umbral_95
+umbral_99
+```
+
+```{r clasificar-atipicos}
+df <- df |>
+  mutate(
+    Region_95 = ifelse(D2_Mahalanobis <= umbral_95, "Dentro 95%", "Fuera 95%"),
+    Region_99 = ifelse(D2_Mahalanobis <= umbral_99, "Dentro 99%", "Fuera 99%")
+  )
+
+table(df$Region_95)
+table(df$Region_99)
+```
+
+```{r grafico-region-95}
+ggplot(df, aes(X1, X2, color = Region_95)) +
+  geom_point(size = 2.2, alpha = 0.85) +
+  stat_ellipse(aes(color = NULL), type = "norm", level = 0.95, linewidth = 1.2) +
+  labs(
+    title = "Región aproximada del 95% usando Mahalanobis",
+    subtitle = "Puntos fuera de la región son candidatos a atípicos multivariantes",
+    x = "X1",
+    y = "X2",
+    color = "Clasificación"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+Esta clasificación no debe interpretarse como una verdad absoluta. Un punto fuera de la región del 95% no necesariamente es un error; puede ser una observación real pero poco frecuente. La inferencia estadística no reemplaza el análisis contextual. Lo que hace es ofrecer una regla objetiva para identificar observaciones que merecen revisión.
+
+# QQ-plot de Mahalanobis para normalidad multivariante
+
+Una aplicación importante de la distancia de Mahalanobis es evaluar visualmente si los datos son compatibles con normalidad multivariante. Si los datos siguen aproximadamente una normal multivariante, las distancias cuadradas de Mahalanobis deberían parecerse a cuantiles de una distribución chi-cuadrado con `p` grados de libertad.
+
+```{r qq-mahalanobis}
+D2_ordenada <- sort(df$D2_Mahalanobis)
+cuantiles_chi <- qchisq(ppoints(length(D2_ordenada)), df = p)
+
+qq_df <- data.frame(
+  Chi_teorico = cuantiles_chi,
+  D2_observado = D2_ordenada
+)
+
+ggplot(qq_df, aes(Chi_teorico, D2_observado)) +
+  geom_point(alpha = 0.75) +
+  geom_abline(slope = 1, intercept = 0, linewidth = 1.1) +
+  labs(
+    title = "QQ-plot de distancias de Mahalanobis",
+    subtitle = "Bajo normalidad multivariante, los puntos deberían aproximarse a la línea",
+    x = "Cuantiles teóricos chi-cuadrado",
+    y = "Distancias Mahalanobis observadas"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+Si los puntos siguen aproximadamente la línea, la normalidad multivariante es razonable visualmente. Si se separan mucho de la línea, especialmente en los extremos, puede haber colas pesadas, atípicos o desviaciones del supuesto normal.
+
+# Regiones de confianza para el vector de medias
+
+Hasta ahora hemos usado elipses para describir regiones donde se ubican observaciones individuales. Pero en inferencia también podemos construir regiones de confianza para el vector de medias poblacional. Esta idea responde a una pregunta distinta: no preguntamos dónde caen los datos, sino dónde podría estar el verdadero centro poblacional.
+
+Para una muestra multivariante normal, una región de confianza para $\boldsymbol{\mu}$ tiene forma elíptica. Su construcción depende de `n`, `p`, la matriz de covarianza muestral y una distribución F. Conceptualmente, la región contiene valores plausibles del vector de medias poblacional.
+
+La idea esencial es:
+
+$$
+n(\bar{\mathbf{x}}-\boldsymbol{\mu}_0)^T
+S^{-1}
+(\bar{\mathbf{x}}-\boldsymbol{\mu}_0)
+\leq
+\frac{p(n-1)}{n-p}
+F_{p,n-p,\alpha}
+$$
+
+Esta expresión permite evaluar si un vector hipotético $\boldsymbol{\mu}_0$ es compatible con la muestra. Si cae dentro de la región, no se rechaza la hipótesis de que ese vector pueda ser el centro poblacional. Si cae fuera, hay evidencia contra esa hipótesis.
+
+# Prueba T² de Hotelling: idea central
+
+La prueba T² de Hotelling es la extensión multivariante de la prueba t para una media. En la prueba t univariada preguntamos si una media poblacional es igual a un valor específico. En T² de Hotelling preguntamos si un vector de medias poblacional es igual a un vector hipotético.
+
+La hipótesis nula se plantea como:
+
+$$
+H_0: \boldsymbol{\mu} = \boldsymbol{\mu}_0
+$$
+
+La hipótesis alternativa es:
+
+$$
+H_1: \boldsymbol{\mu} \neq \boldsymbol{\mu}_0
+$$
+
+El estadístico de Hotelling para una muestra es:
+
+$$
+T^2 =
+n(\bar{\mathbf{x}}-\boldsymbol{\mu}_0)^T
+S^{-1}
+(\bar{\mathbf{x}}-\boldsymbol{\mu}_0)
+$$
+
+Esta fórmula es muy parecida a la distancia de Mahalanobis, pero aplicada al vector de medias muestral. La diferencia clave es que estamos evaluando el alejamiento del centro muestral respecto a un centro hipotético, ajustado por la covarianza y por el tamaño de muestra.
+
+# Ejemplo de T² de Hotelling con datos simulados
+
+Supongamos que queremos contrastar si el vector de medias poblacional es:
+
+$$
+\boldsymbol{\mu}_0 =
+\begin{pmatrix}
+0 \\
+0
+\end{pmatrix}
+$$
+
+```{r hotellings-t2}
+X_mat <- as.matrix(df[, c("X1", "X2")])
+
+n <- nrow(X_mat)
+p <- ncol(X_mat)
+
+xbar <- colMeans(X_mat)
+S <- cov(X_mat)
+
+mu0 <- c(0, 0)
+
+T2 <- n * t(xbar - mu0) %*% solve(S) %*% (xbar - mu0)
+T2 <- as.numeric(T2)
+
+F_stat <- ((n - p) / (p * (n - 1))) * T2
+
+p_value <- 1 - pf(F_stat, df1 = p, df2 = n - p)
+
+T2
+F_stat
+p_value
+```
+
+El valor p indica si el vector de medias observado se aleja significativamente del vector hipotético $\boldsymbol{\mu}_0$. Si el valor p es pequeño, por ejemplo menor que 0.05, se rechaza la hipótesis nula. Si el valor p es grande, no se rechaza la hipótesis nula.
+
+Es importante resaltar que esta prueba considera simultáneamente ambas variables y su covarianza. No equivale a hacer dos pruebas t por separado. Hacer pruebas separadas ignora la estructura multivariante y aumenta problemas de interpretación. Hotelling T² evalúa el vector completo como una unidad.
+
+# Aplicación con dataset real: Wine
+
+Ahora aplicaremos las ideas de inferencia y Mahalanobis sobre un dataset real de calidad de vino tinto. Usaremos variables químicas del vino. Este ejemplo permite mostrar cómo detectar observaciones multivariantes inusuales en un contexto aplicado.
+
+```{r cargar-wine}
+library(readr)
+winequality_red <- read_csv("winequality-red.csv")
+View(winequality_red)
+```
+
+```{r seleccionar-variables-wine}
+wine_vars <- winequality_red |>
+  select(
+    fixed_acidity,
+    volatile_acidity,
+    citric_acid,
+    residual_sugar,
+    chlorides,
+    free_sulfur_dioxide,
+    total_sulfur_dioxide,
+    density,pH,sulphates,alcohol,quality
+  )
+
+summary(wine_vars)
+```
+
+Como las variables están en escalas diferentes, debemos estandarizarlas antes de calcular distancias multivariantes. Esto evita que variables con valores numéricamente grandes dominen el análisis.
+
+```{r estandarizar-wine}
+wine_scaled <- scale(wine_vars)
+wine_scaled <- as.data.frame(wine_scaled)
+
+head(wine_scaled)
+```
+
+# Mahalanobis en dataset real
+
+```{r mahalanobis-wine}
+center_wine <- colMeans(wine_scaled)
+cov_wine <- cov(wine_scaled)
+
+wine_scaled$D2_Mahalanobis <- mahalanobis(
+  x = wine_scaled[, names(wine_vars)],
+  center = center_wine,
+  cov = cov_wine
+)
+
+p_wine <- ncol(wine_vars)
+
+umbral_wine_95 <- qchisq(0.95, df = p_wine)
+umbral_wine_99 <- qchisq(0.99, df = p_wine)
+
+wine_scaled <- wine_scaled |>
+  mutate(
+    Atipico_95 = D2_Mahalanobis > umbral_wine_95,
+    Atipico_99 = D2_Mahalanobis > umbral_wine_99
+  )
+
+table(wine_scaled$Atipico_95)
+table(wine_scaled$Atipico_99)
+```
+
+```{r hist-mahalanobis-wine}
+ggplot(wine_scaled, aes(D2_Mahalanobis)) +
+  geom_histogram(bins = 35, alpha = 0.75) +
+  geom_vline(xintercept = umbral_wine_95, linewidth = 1.1, linetype = "dashed") +
+  geom_vline(xintercept = umbral_wine_99, linewidth = 1.1, linetype = "dotted") +
+  labs(
+    title = "Distribución de distancias de Mahalanobis en Wine",
+    subtitle = "Línea discontinua: umbral 95%; línea punteada: umbral 99%",
+    x = "D² Mahalanobis",
+    y = "Frecuencia"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+En este gráfico, las observaciones ubicadas a la derecha de los umbrales son candidatas a atípicos multivariantes. Esto no significa automáticamente que sean errores. Podrían representar vinos con perfiles químicos poco comunes. El análisis estadístico debe complementarse con conocimiento del dominio.
+
+# Visualización de atípicos usando PCA
+
+Como el dataset tiene 11 variables, no podemos visualizar directamente todas las dimensiones. Usaremos PCA para proyectar los datos en dos dimensiones y colorear los posibles atípicos detectados con Mahalanobis.
+
+```{r pca-wine-atipicos}
+pca_wine <- prcomp(wine_scaled[, names(wine_vars)], center = FALSE, scale. = FALSE)
+
+scores_wine <- as.data.frame(pca_wine$x)
+scores_wine$Atipico_95 <- wine_scaled$Atipico_95
+scores_wine$D2_Mahalanobis <- wine_scaled$D2_Mahalanobis
+
+var_exp_wine <- (pca_wine$sdev^2) / sum(pca_wine$sdev^2)
+
+ggplot(scores_wine, aes(PC1, PC2, color = Atipico_95)) +
+  geom_point(alpha = 0.75, size = 2) +
+  labs(
+    title = "Atípicos multivariantes proyectados en PCA",
+    subtitle = "La detección se realiza con Mahalanobis; PCA sólo ayuda a visualizar",
+    x = paste0("PC1 (", round(var_exp_wine[1] * 100, 1), "%)"),
+    y = paste0("PC2 (", round(var_exp_wine[2] * 100, 1), "%)"),
+    color = "Atípico 95%"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+Este gráfico permite explicar una idea importante: PCA y Mahalanobis cumplen roles distintos. PCA ayuda a visualizar y reducir dimensión. Mahalanobis ayuda a medir alejamiento estadístico en el espacio multivariante completo. Por eso no debemos confundirlos. Un punto puede parecer no tan extremo en el plano PC1-PC2, pero ser atípico considerando todas las variables.
+
+# Actividad guiada
+
+Responda en grupos:
+
+1. ¿Cuál es la diferencia entre distancia euclídea y distancia de Mahalanobis?
+2. ¿Por qué la distribución chi-cuadrado aparece en la inferencia multivariante?
+3. ¿Qué significa que un punto esté fuera de la región del 95%?
+4. ¿Por qué un atípico multivariante puede no parecer extremo en una sola variable?
+5. ¿Qué evalúa la prueba T² de Hotelling?
+6. ¿Por qué Hotelling T² no es equivalente a hacer varias pruebas t por separado?
+7. En el dataset Wine, ¿cuántos posibles atípicos aparecen al 95%?
+8. ¿Qué interpretación tendría un vino con distancia de Mahalanobis muy alta?
+9. ¿Qué rol cumple PCA en la visualización de atípicos?
+10. ¿Qué precauciones deben tomarse antes de concluir que un dato es realmente anómalo?
+
+# Cierre de la clase
+
+En esta clase pasamos del análisis descriptivo al análisis inferencial multivariante. Ya no sólo observamos la forma de los datos, sino que construimos reglas estadísticas para evaluar si una observación es usual, si un centro hipotético es compatible con la muestra y cómo se pueden construir regiones de confianza en espacios de varias dimensiones.
+
+La idea más importante es que en estadística multivariante las decisiones deben considerar la estructura conjunta de los datos. No basta con mirar variable por variable. La covarianza, la forma elíptica, la distancia de Mahalanobis y la distribución chi-cuadrado permiten construir una inferencia coherente para fenómenos multidimensionales.
+
+# Próxima clase sugerida
+
+La siguiente clase puede profundizar en:
+
+- Prueba T² de Hotelling para una muestra.
+- Comparación de dos grupos con Hotelling T².
+- Relación entre Hotelling T², MANOVA y control estadístico multivariante.

@@ -1,0 +1,603 @@
+###############################################################
+# UNIVERSIDAD DISTRITAL
+# ESTADÍSTICA MULTIDIMENSIONAL
+# CLASE: DATOS MULTIVARIANTES
+# DATASET: iris
+###############################################################
+
+##############################
+# BLOQUE 0. PREPARACIÓN
+##############################
+
+rm(list = ls())
+cat("\014")
+
+cat("=====================================================\n")
+cat("ESTADÍSTICA MULTIDIMENSIONAL - DATOS MULTIVARIANTES\n")
+cat("=====================================================\n\n")
+
+##############################
+# BLOQUE 1. LIBRERÍAS
+##############################
+
+paquetes <- c(
+  "ggplot2",
+  "dplyr",
+  "tidyr",
+  "plotly",
+  "GGally",
+  "corrplot",
+  "MASS",
+  "lattice"
+)
+
+instalados <- paquetes %in% installed.packages()[, "Package"]
+if (any(!instalados)) {
+  install.packages(paquetes[!instalados])
+}
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(plotly)
+library(GGally)
+library(corrplot)
+library(MASS)
+library(lattice)
+
+cat("Bloque 1 listo: librerías cargadas.\n\n")
+
+##############################
+# BLOQUE 2. CARGA Y EXPLORACIÓN
+##############################
+
+data("iris")
+
+head(iris)
+str(iris)
+summary(iris)
+
+datos_num <- iris[, 1:4]
+grupo <- iris$Species
+
+cat("=====================================================\n")
+cat("BLOQUE 2. EXPLORACIÓN DEL CONJUNTO DE DATOS\n")
+cat("=====================================================\n")
+cat("El dataset iris contiene 150 observaciones.\n")
+cat("Tiene 4 variables numéricas y 1 variable categórica.\n")
+cat("Cada fila representa una observación medida en varias variables.\n\n")
+
+cat("Primera observación:\n")
+print(iris[1, ])
+cat("\n")
+
+cat("Idea central:\n")
+cat("Cada observación puede entenderse como un vector de varias medidas.\n")
+cat("Por eso, en análisis multivariante estudiamos una nube de puntos\n")
+cat("en un espacio de varias dimensiones.\n\n")
+
+##############################
+# BLOQUE 3. VISUALIZACIÓN EN EL ESPACIO
+##############################
+
+cat("=====================================================\n")
+cat("BLOQUE 3. VISUALIZACIÓN EN EL ESPACIO\n")
+cat("=====================================================\n")
+cat("La visualización en el espacio representa observaciones como puntos.\n")
+cat("Cada eje corresponde a una variable.\n")
+cat("Permite observar agrupamientos, separación entre grupos y atípicos.\n\n")
+
+graf_2d <- ggplot(iris, aes(x = Sepal.Length, y = Sepal.Width, color = Species)) +
+  geom_point(size = 3, alpha = 0.8) +
+  labs(
+    title = "Visualización en el espacio (2D)",
+    subtitle = "Cada punto representa una observación",
+    x = "Largo del sépalo",
+    y = "Ancho del sépalo"
+  ) +
+  theme_minimal()
+
+print(graf_2d)
+
+cat("Qué observar en 2D:\n")
+cat("- mezcla o separación entre grupos\n")
+cat("- puntos aislados\n")
+cat("- dispersión de la nube\n")
+cat("- forma general del conjunto\n\n")
+
+graf_3d <- plot_ly(
+  data = iris,
+  x = ~Sepal.Length,
+  y = ~Sepal.Width,
+  z = ~Petal.Length,
+  color = ~Species,
+  type = "scatter3d",
+  mode = "markers"
+) %>%
+  layout(
+    title = "Visualización en el espacio (3D)",
+    scene = list(
+      xaxis = list(title = "Sepal.Length"),
+      yaxis = list(title = "Sepal.Width"),
+      zaxis = list(title = "Petal.Length")
+    )
+  )
+
+graf_3d
+
+cat("Qué observar en 3D:\n")
+cat("- estructura espacial más completa\n")
+cat("- separación entre especies\n")
+cat("- puntos extremos\n")
+cat("- agrupamientos naturales\n\n")
+
+##############################
+# BLOQUE 4. TRANSFORMACIÓN A FORMATO LARGO
+##############################
+
+iris_largo <- iris %>%
+  pivot_longer(
+    cols = 1:4,
+    names_to = "Variable",
+    values_to = "Valor"
+  )
+
+cat("Bloque 4 listo: datos transformados a formato largo.\n\n")
+
+##############################
+# BLOQUE 5. BOXPLOT
+##############################
+
+cat("=====================================================\n")
+cat("BLOQUE 5. BOXPLOT\n")
+cat("=====================================================\n")
+cat("El boxplot resume la distribución de una variable.\n")
+cat("Permite comparar centro, dispersión y posibles atípicos.\n\n")
+
+box_general <- ggplot(iris_largo, aes(x = Variable, y = Valor, fill = Variable)) +
+  geom_boxplot(alpha = 0.7) +
+  labs(
+    title = "Boxplot por variable",
+    subtitle = "Centro, dispersión y posibles outliers",
+    x = "Variable",
+    y = "Valor"
+  ) +
+  theme_minimal()
+
+print(box_general)
+
+cat("Qué interpretar en un boxplot:\n")
+cat("- la línea central es la mediana\n")
+cat("- la caja contiene el 50% central de los datos\n")
+cat("- los bigotes muestran extensión sin extremos severos\n")
+cat("- puntos aislados indican posibles atípicos\n\n")
+
+box_grupo <- ggplot(iris_largo, aes(x = Species, y = Valor, fill = Species)) +
+  geom_boxplot(alpha = 0.7) +
+  facet_wrap(~Variable, scales = "free") +
+  labs(
+    title = "Boxplot por especie y variable",
+    subtitle = "Comparación entre grupos",
+    x = "Especie",
+    y = "Valor"
+  ) +
+  theme_minimal()
+
+print(box_grupo)
+
+cat("Qué interpretar por grupos:\n")
+cat("- diferencias de centro entre especies\n")
+cat("- diferencias de dispersión\n")
+cat("- variables que separan mejor las categorías\n\n")
+
+##############################
+# BLOQUE 6. HISTOGRAMA
+##############################
+
+cat("=====================================================\n")
+cat("BLOQUE 6. HISTOGRAMA\n")
+cat("=====================================================\n")
+cat("El histograma divide los datos en intervalos y cuenta frecuencias.\n")
+cat("Sirve para estudiar la forma de la distribución.\n\n")
+
+hist_general <- ggplot(iris_largo, aes(x = Valor, fill = Variable)) +
+  geom_histogram(bins = 20, color = "black", alpha = 0.7) +
+  facet_wrap(~Variable, scales = "free") +
+  labs(
+    title = "Histogramas por variable",
+    subtitle = "Forma de distribución de cada variable",
+    x = "Valor",
+    y = "Frecuencia"
+  ) +
+  theme_minimal()
+
+print(hist_general)
+
+cat("Qué interpretar en un histograma:\n")
+cat("- simetría o sesgo\n")
+cat("- concentración de datos\n")
+cat("- uno o varios picos\n")
+cat("- amplitud aproximada de valores\n\n")
+
+##############################
+# BLOQUE 7. DENSIDAD KERNEL
+##############################
+
+cat("=====================================================\n")
+cat("BLOQUE 7. DENSIDAD KERNEL\n")
+cat("=====================================================\n")
+cat("La densidad kernel es una versión suavizada de la distribución.\n")
+cat("Ayuda a comparar formas sin depender tanto de los intervalos del histograma.\n\n")
+
+dens_variable <- ggplot(iris_largo, aes(x = Valor, color = Variable, fill = Variable)) +
+  geom_density(alpha = 0.2) +
+  facet_wrap(~Variable, scales = "free") +
+  labs(
+    title = "Densidad kernel por variable",
+    subtitle = "Curva suavizada de la distribución",
+    x = "Valor",
+    y = "Densidad"
+  ) +
+  theme_minimal()
+
+print(dens_variable)
+
+cat("Qué interpretar en densidad kernel:\n")
+cat("- ubicación de los picos\n")
+cat("- amplitud de la curva\n")
+cat("- asimetría\n")
+cat("- posible multimodalidad\n\n")
+
+dens_grupo <- ggplot(iris_largo, aes(x = Valor, color = Species, fill = Species)) +
+  geom_density(alpha = 0.2) +
+  facet_wrap(~Variable, scales = "free") +
+  labs(
+    title = "Densidad kernel por especie",
+    subtitle = "Comparación entre grupos",
+    x = "Valor",
+    y = "Densidad"
+  ) +
+  theme_minimal()
+
+print(dens_grupo)
+
+cat("Qué interpretar entre especies:\n")
+cat("- cuánto se superponen las distribuciones\n")
+cat("- qué variable diferencia mejor grupos\n")
+cat("- qué grupo se concentra en valores más altos o más bajos\n\n")
+
+##############################
+# BLOQUE 8. SCATTERPLOT
+##############################
+
+cat("=====================================================\n")
+cat("BLOQUE 8. SCATTERPLOT\n")
+cat("=====================================================\n")
+cat("El scatterplot representa dos variables cuantitativas.\n")
+cat("Permite estudiar asociación, forma de relación, grupos y atípicos.\n\n")
+
+scatter_simple <- ggplot(iris, aes(x = Petal.Length, y = Petal.Width, color = Species)) +
+  geom_point(size = 3, alpha = 0.8) +
+  labs(
+    title = "Scatterplot: Petal.Length vs Petal.Width",
+    subtitle = "Relación entre dos variables cuantitativas",
+    x = "Largo del pétalo",
+    y = "Ancho del pétalo"
+  ) +
+  theme_minimal()
+
+print(scatter_simple)
+
+cat("Qué interpretar en scatterplot:\n")
+cat("- nube ascendente: asociación positiva\n")
+cat("- nube descendente: asociación negativa\n")
+cat("- nube sin patrón: poca relación lineal\n")
+cat("- puntos muy alineados: relación fuerte\n")
+cat("- puntos muy dispersos: relación débil\n")
+cat("- grupos visibles: posible separación entre categorías\n\n")
+
+scatter_tendencia <- ggplot(iris, aes(x = Petal.Length, y = Petal.Width, color = Species)) +
+  geom_point(size = 3, alpha = 0.8) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    title = "Scatterplot con tendencia lineal",
+    subtitle = "Apoyo visual para la dirección de la relación",
+    x = "Largo del pétalo",
+    y = "Ancho del pétalo"
+  ) +
+  theme_minimal()
+
+print(scatter_tendencia)
+
+cat("La línea de tendencia ayuda a visualizar la dirección general.\n")
+cat("No implica causalidad.\n\n")
+
+pairs(
+  datos_num,
+  col = c("red", "green", "blue")[grupo],
+  pch = 19,
+  main = "Matriz de scatterplots"
+)
+
+cat("La matriz de scatterplots permite revisar todas las parejas de variables.\n\n")
+
+ggpairs(
+  iris,
+  columns = 1:4,
+  aes(color = Species, alpha = 0.7)
+)
+
+cat("La matriz ampliada combina distribuciones y relaciones entre pares.\n\n")
+
+##############################
+# BLOQUE 9. MATRIZ DE CORRELACIÓN
+##############################
+
+cat("=====================================================\n")
+cat("BLOQUE 9. MATRIZ DE CORRELACIÓN\n")
+cat("=====================================================\n")
+cat("La correlación mide dependencia lineal entre dos variables.\n")
+cat("Toma valores entre -1 y 1.\n\n")
+
+mat_cor <- cor(datos_num)
+print(mat_cor)
+
+cat("\nInterpretación general:\n")
+cat("- cerca de 1  -> relación positiva fuerte\n")
+cat("- cerca de -1 -> relación negativa fuerte\n")
+cat("- cerca de 0  -> poca relación lineal\n\n")
+
+corrplot(
+  mat_cor,
+  method = "color",
+  type = "upper",
+  addCoef.col = "black",
+  tl.col = "black",
+  tl.srt = 45,
+  number.cex = 0.8,
+  title = "Matriz de correlación visual",
+  mar = c(0, 0, 1, 0)
+)
+
+cat("La matriz visual resume la intensidad y signo de las relaciones.\n\n")
+
+cor_largo <- as.data.frame(as.table(mat_cor))
+colnames(cor_largo) <- c("Var1", "Var2", "Correlacion")
+
+heat_cor <- ggplot(cor_largo, aes(x = Var1, y = Var2, fill = Correlacion)) +
+  geom_tile() +
+  geom_text(aes(label = round(Correlacion, 2))) +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
+  labs(
+    title = "Heatmap de correlación",
+    subtitle = "Resumen visual de dependencia lineal",
+    x = "",
+    y = ""
+  ) +
+  theme_minimal()
+
+print(heat_cor)
+
+##############################
+# BLOQUE 10. COORDENADAS PARALELAS
+##############################
+
+cat("=====================================================\n")
+cat("BLOQUE 10. COORDENADAS PARALELAS\n")
+cat("=====================================================\n")
+cat("Cada eje vertical representa una variable.\n")
+cat("Cada línea representa una observación.\n")
+cat("Sirve para comparar perfiles completos.\n\n")
+
+parallelplot(
+  ~datos_num | Species,
+  data = iris,
+  horizontal.axis = FALSE,
+  col = c("red", "green", "blue"),
+  main = "Coordenadas paralelas por especie"
+)
+
+cat("Qué interpretar en coordenadas paralelas:\n")
+cat("- trayectorias similares dentro de un grupo\n")
+cat("- diferencias entre categorías\n")
+cat("- observaciones con perfiles atípicos\n\n")
+
+parcoord(
+  datos_num,
+  col = c("red", "green", "blue")[grupo],
+  var.label = TRUE,
+  main = "Coordenadas paralelas"
+)
+
+##############################
+# BLOQUE 11. MEDIDAS DESCRIPTIVAS MULTIVARIANTES
+##############################
+
+cat("=====================================================\n")
+cat("BLOQUE 11. MEDIDAS DESCRIPTIVAS MULTIVARIANTES\n")
+cat("=====================================================\n")
+cat("En análisis multivariante interesa resumir:\n")
+cat("- localización\n")
+cat("- dispersión\n")
+cat("- dependencia\n\n")
+
+##############################
+# BLOQUE 11.1 LOCALIZACIÓN
+##############################
+
+cat("-----------------------------------------------------\n")
+cat("LOCALIZACIÓN\n")
+cat("-----------------------------------------------------\n")
+
+media_vectorial <- colMeans(datos_num)
+print(media_vectorial)
+
+cat("\nLa media vectorial resume el centro multivariante.\n")
+cat("Representa el promedio de cada variable.\n\n")
+
+media_por_grupo <- iris %>%
+  group_by(Species) %>%
+  summarise(across(where(is.numeric), mean))
+
+print(media_por_grupo)
+
+cat("\nLas medias por grupo muestran diferencias en el perfil promedio.\n\n")
+
+##############################
+# BLOQUE 11.2 DISPERSIÓN
+##############################
+
+cat("-----------------------------------------------------\n")
+cat("DISPERSIÓN\n")
+cat("-----------------------------------------------------\n")
+
+varianzas <- apply(datos_num, 2, var)
+cat("Varianzas:\n")
+print(varianzas)
+cat("\n")
+
+desv_std <- apply(datos_num, 2, sd)
+cat("Desviaciones estándar:\n")
+print(desv_std)
+cat("\n")
+
+rangos <- apply(datos_num, 2, function(x) max(x) - min(x))
+cat("Rangos:\n")
+print(rangos)
+cat("\n")
+
+mat_cov <- cov(datos_num)
+cat("Matriz de covarianza:\n")
+print(mat_cov)
+cat("\n")
+
+det_cov <- det(mat_cov)
+cat("Determinante de la matriz de covarianza:\n")
+print(det_cov)
+cat("\n")
+
+cat("Interpretación de dispersión:\n")
+cat("- varianza: variabilidad de cada variable\n")
+cat("- desviación estándar: variabilidad en unidades originales\n")
+cat("- rango: amplitud total\n")
+cat("- covarianza: cambio conjunto entre variables\n")
+cat("- determinante: medida global de dispersión multivariante\n\n")
+
+##############################
+# BLOQUE 11.3 DEPENDENCIA
+##############################
+
+cat("-----------------------------------------------------\n")
+cat("DEPENDENCIA\n")
+cat("-----------------------------------------------------\n")
+
+cat("Matriz de correlación:\n")
+print(mat_cor)
+cat("\n")
+
+cat("La correlación es una versión estandarizada de la covarianza.\n")
+cat("Permite comparar relaciones con más facilidad.\n\n")
+
+for (esp in unique(iris$Species)) {
+  cat("Correlación para la especie:", esp, "\n")
+  sub <- iris %>% filter(Species == esp) %>% select(-Species)
+  print(cor(sub))
+  cat("\n")
+}
+
+##############################
+# BLOQUE 12. DISTANCIA DE MAHALANOBIS
+##############################
+
+cat("=====================================================\n")
+cat("BLOQUE 12. DISTANCIA DE MAHALANOBIS\n")
+cat("=====================================================\n")
+cat("Es una distancia multivariante que considera:\n")
+cat("- el centro del conjunto\n")
+cat("- la dispersión\n")
+cat("- la correlación entre variables\n\n")
+
+dist_mahal <- mahalanobis(datos_num, center = media_vectorial, cov = mat_cov)
+iris$Dist_Mahalanobis <- dist_mahal
+
+head(iris)
+
+graf_mahal <- ggplot(iris, aes(x = 1:nrow(iris), y = Dist_Mahalanobis, color = Species)) +
+  geom_point(size = 2) +
+  geom_hline(
+    yintercept = qchisq(0.975, df = ncol(datos_num)),
+    linetype = "dashed"
+  ) +
+  labs(
+    title = "Distancia de Mahalanobis",
+    subtitle = "Detección de observaciones multivariadamente atípicas",
+    x = "Observación",
+    y = "Distancia"
+  ) +
+  theme_minimal()
+
+print(graf_mahal)
+
+cat("Una observación puede no ser extrema en una sola variable,\n")
+cat("pero sí ser atípica cuando se consideran todas simultáneamente.\n\n")
+
+##############################
+# BLOQUE 13. RESUMEN FINAL
+##############################
+
+cat("=====================================================\n")
+cat("RESUMEN FINAL DEL BLOQUE\n")
+cat("=====================================================\n")
+
+cat("\n1. Localización\n")
+cat("La media vectorial resume el centro multivariante.\n")
+print(round(media_vectorial, 3))
+
+cat("\n2. Dispersión\n")
+cat("Las varianzas y la covarianza resumen la variabilidad.\n")
+print(round(mat_cov, 3))
+
+cat("\n3. Dependencia\n")
+cat("La correlación resume asociación lineal.\n")
+print(round(mat_cor, 3))
+
+cat("\n4. Atípicos multivariantes\n")
+cat("La distancia de Mahalanobis ayuda a detectarlos.\n\n")
+
+##############################
+# BLOQUE 14. PREGUNTAS DE CIERRE
+##############################
+
+cat("=====================================================\n")
+cat("PREGUNTAS DE CIERRE\n")
+cat("=====================================================\n")
+cat("
+1. ¿Qué variable parece tener mayor dispersión?
+2. ¿Qué variable diferencia mejor las especies?
+3. ¿Qué diferencia hay entre histograma y densidad kernel?
+4. ¿Qué relación existe entre Petal.Length y Petal.Width?
+5. ¿Qué aporta la matriz de correlación?
+6. ¿Qué ventaja tienen las coordenadas paralelas?
+7. ¿Qué diferencia hay entre covarianza y correlación?
+8. ¿Por qué una observación puede ser atípica multivariante y no univariante?
+")
+
+##############################
+# BLOQUE 15. CIERRE
+##############################
+
+cat("\n=====================================================\n")
+cat("CIERRE\n")
+cat("=====================================================\n")
+cat("
+En datos multivariantes no basta con estudiar variables por separado.
+Se necesita comprender:
+- cómo se distribuye cada variable,
+- cómo se relaciona con las demás,
+- cómo cambian los perfiles entre grupos,
+- y cómo se comporta el conjunto completo.
+
+Las gráficas permiten observar patrones.
+Las medidas descriptivas permiten cuantificarlos.
+Esa combinación constituye la base del análisis exploratorio multivariante.
+")

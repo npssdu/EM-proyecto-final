@@ -1,0 +1,560 @@
+---
+title: "Estadística Multidimensional"
+author: "Jhon Alejandro Varón"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+output:
+  html_document:
+    toc: true
+    toc_depth: '3'
+    df_print: paged
+  html_notebook:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+subtitle: "Clase 3 - Relaciones entre variables y estructura multivariante con USArrests"
+---
+
+# 1. Apertura de la clase
+
+En las clases anteriores trabajamos con la idea de **datos multivariantes** y con herramientas básicas de visualización.  
+En esta clase vamos a dar un paso más importante: ya no solo veremos variables de manera aislada, sino que comenzaremos a estudiar **cómo se relacionan entre sí** y qué nos dice esa relación sobre la estructura general de los datos.
+
+## Idea central de la clase
+
+> En análisis multivariado no estudiamos variables sueltas; estudiamos sistemas de variables.
+
+Esto significa que el interés ya no está solamente en saber si una variable sube o baja, sino en comprender:
+
+- si dos o más variables cambian juntas,
+- si existe dependencia entre ellas,
+- si el sistema tiene patrones,
+- y si los datos muestran una estructura interna que pueda interpretarse.
+
+---
+
+# 2. Objetivo de la clase
+
+Al finalizar esta sesión, el estudiante estará en capacidad de:
+
+- comprender qué significa que dos variables estén relacionadas,
+- interpretar visualmente relaciones entre variables,
+- reconocer la noción de dependencia en un conjunto de datos,
+- usar la correlación como una medida inicial de asociación lineal,
+- leer una matriz de correlación como un resumen estructural del sistema,
+- interpretar coordenadas paralelas como perfiles completos de observaciones.
+
+---
+
+# 3. Dataset de trabajo: USArrests
+
+Trabajaremos con el dataset `USArrests`, incluido en R.
+
+```{r}
+data("USArrests")
+df <- USArrests
+df$State <- rownames(df)
+head(df)
+```
+
+## ¿Qué representa este dataset?
+
+Cada fila representa un **estado de Estados Unidos**.  
+Cada columna representa una **variable cuantitativa** asociada a tasas de criminalidad o características demográficas.
+
+Las variables son:
+
+- `Murder`: tasa de arrestos por asesinato,
+- `Assault`: tasa de arrestos por asalto,
+- `UrbanPop`: porcentaje de población urbana,
+- `Rape`: tasa de arrestos por violación.
+
+## Cómo debemos leerlo
+
+Este dataset no debe leerse como una tabla aislada de números.  
+Debe leerse como un **sistema multivariante**, donde cada estado está descrito simultáneamente por cuatro dimensiones.
+
+Eso significa que cada estado puede entenderse como un punto en un espacio de cuatro variables.
+
+---
+
+# 4. Estructura general del dataset
+
+```{r}
+str(df)
+summary(df[, 1:4])
+dim(df)
+```
+
+## Interpretación conceptual
+
+Aquí vemos tres cosas importantes:
+
+### 4.1 Tipo de datos
+Las cuatro variables principales son numéricas.  
+Eso es importante porque muchas técnicas del análisis multivariado clásico trabajan con variables cuantitativas.
+
+### 4.2 Número de observaciones
+Tenemos 50 observaciones, una por estado.
+
+### 4.3 Lectura estadística inicial
+El resumen permite identificar:
+
+- rangos,
+- medianas,
+- cuartiles,
+- posibles diferencias de escala entre variables.
+
+## Reflexión docente
+
+> Antes de analizar relaciones, debemos entender la naturaleza de las variables.
+
+Si dos variables están en escalas muy diferentes, debemos ser cuidadosos al compararlas visualmente o al interpretarlas matemáticamente.
+
+---
+
+# 5. ¿Qué significa que dos variables estén relacionadas?
+
+Esta es la pregunta central de la clase.
+
+Dos variables están relacionadas cuando el comportamiento de una aporta información sobre la otra.
+
+Por ejemplo:
+
+- si al aumentar `Murder` también tiende a aumentar `Assault`,
+- si al aumentar `UrbanPop` cambia sistemáticamente `Rape`,
+- o si algunas variables parecen moverse juntas.
+
+## Dependencia: idea intuitiva
+
+Diremos de forma intuitiva que existe **dependencia** cuando conocer una variable ayuda a anticipar el comportamiento de otra.
+
+## Aclaración importante
+
+No toda relación implica causa.  
+Que dos variables se muevan juntas no significa necesariamente que una cause a la otra.
+
+> Correlación no implica causalidad.
+
+Esta es una de las ideas más importantes de la clase.
+
+---
+
+# 6. Visualización del espacio multivariante
+
+Una forma de comenzar a estudiar relaciones entre variables es proyectar el espacio multivariante en pares de variables.
+
+Para eso usaremos una matriz de dispersión.
+
+```{r message=FALSE, warning=FALSE}
+library(GGally)
+ggpairs(df[, 1:4])
+```
+
+## Qué representa este gráfico
+
+Este gráfico no es solo un conjunto de imágenes.  
+Es una representación parcial del **espacio multivariante**.
+
+Cada panel muestra la relación entre dos variables.
+
+## Cómo analizarlo
+
+Cuando observes esta matriz, pregúntate:
+
+- ¿Qué pares de variables parecen crecer juntos?
+- ¿Hay relaciones lineales claras?
+- ¿Algunas variables parecen casi independientes?
+- ¿Existen observaciones extremas?
+- ¿La nube de puntos tiene forma compacta o dispersa?
+
+## Idea clave
+
+> La matriz de dispersión nos permite detectar estructura antes de formalizarla matemáticamente.
+
+Es decir, primero vemos, luego medimos.
+
+---
+
+# 7. Scatterplot como herramienta de hipótesis visual
+
+Tomemos un ejemplo particular: `Murder` contra `Assault`.
+
+```{r}
+library(ggplot2)
+
+ggplot(df, aes(x = Murder, y = Assault)) +
+  geom_point(color = "red", size = 2) +
+  labs(
+    title = "Relación entre Murder y Assault",
+    x = "Murder",
+    y = "Assault"
+  )
+```
+
+## Qué estamos viendo
+
+Cada punto representa un estado.  
+La posición del punto depende de sus valores en `Murder` y `Assault`.
+
+## Qué debemos analizar
+
+### 7.1 Dirección
+¿Cuando una variable aumenta, la otra también aumenta?
+
+### 7.2 Forma
+¿La relación parece lineal, curvilínea o inexistente?
+
+### 7.3 Intensidad
+¿Los puntos están cerca de una tendencia o muy dispersos?
+
+## Qué decir en clase
+
+> Un scatterplot no prueba una teoría, pero sí sugiere una estructura.
+
+En otras palabras, el gráfico permite formular hipótesis:
+
+- puede sugerir dependencia,
+- puede mostrar tendencia,
+- puede indicar que dos variables responden a un mismo fenómeno subyacente.
+
+---
+
+# 8. Scatterplot con línea de tendencia
+
+Para reforzar la lectura visual, añadimos una línea de ajuste lineal.
+
+```{r}
+ggplot(df, aes(x = Murder, y = Assault)) +
+  geom_point(color = "darkred", size = 2) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(
+    title = "Murder vs Assault con tendencia lineal",
+    x = "Murder",
+    y = "Assault"
+  )
+```
+
+## Interpretación conceptual
+
+La línea azul no es la realidad; es un modelo simplificado.
+
+Nos ayuda a responder:
+
+- si existe una tendencia promedio,
+- si la relación parece lineal,
+- si la dispersión alrededor de la línea es grande o pequeña.
+
+## Lectura de fondo
+
+Si los puntos siguen de cerca la línea, la relación lineal es más clara.  
+Si están muy dispersos, la linealidad es más débil.
+
+## Idea docente para enfatizar
+
+> La línea no reemplaza los datos; solo resume su tendencia.
+
+---
+
+# 9. Distribución de una variable: histograma
+
+Antes de seguir con relaciones entre variables, conviene analizar cómo se comporta una variable por sí sola.  
+Tomemos `Murder`.
+
+```{r}
+ggplot(df, aes(x = Murder)) +
+  geom_histogram(fill = "steelblue", bins = 10, color = "white") +
+  labs(
+    title = "Histograma de Murder",
+    x = "Murder",
+    y = "Frecuencia"
+  )
+```
+
+## Qué nos dice el histograma
+
+El histograma muestra la distribución de una variable.
+
+Nos permite responder:
+
+- ¿Dónde se concentran los valores?
+- ¿Hay asimetría?
+- ¿Existen pocos estados con valores muy altos?
+- ¿La mayoría de observaciones está agrupada o dispersa?
+
+## Lectura conceptual
+
+> El histograma estudia el comportamiento individual de una variable, no su relación con otras.
+
+Esto es importante porque en multivariado no abandonamos lo univariado; lo integramos.
+
+---
+
+# 10. Densidad kernel: forma suave de la distribución
+
+```{r}
+ggplot(df, aes(x = Murder)) +
+  geom_density(fill = "blue", alpha = 0.4) +
+  labs(
+    title = "Densidad kernel de Murder",
+    x = "Murder",
+    y = "Densidad"
+  )
+```
+
+## Qué aporta la densidad kernel
+
+La densidad kernel es una versión suavizada de la distribución.
+
+A diferencia del histograma, no depende de cortes discretos, sino que produce una curva continua.
+
+## Cómo interpretarla
+
+La curva permite ver:
+
+- zonas de alta concentración,
+- asimetría,
+- posibles modos múltiples,
+- estructura general de la variable.
+
+## Qué decir en clase
+
+> El histograma muestra frecuencia por intervalos; la densidad muestra la forma global de la distribución.
+
+---
+
+# 11. Boxplot: resumen robusto de la distribución
+
+Tomemos ahora la variable `Assault`.
+
+```{r}
+ggplot(df, aes(y = Assault)) +
+  geom_boxplot(fill = "orange") +
+  labs(
+    title = "Boxplot de Assault",
+    y = "Assault"
+  )
+```
+
+## Qué resume este gráfico
+
+El boxplot resume una variable a través de:
+
+- mediana,
+- cuartiles,
+- rango intercuartílico,
+- posibles valores atípicos.
+
+## Qué debemos analizar
+
+- ¿La mediana está centrada o desplazada?
+- ¿La caja es grande o pequeña?
+- ¿Hay puntos extremos?
+
+## Interpretación de fondo
+
+> Un boxplot no muestra toda la distribución, pero sí su estructura esencial.
+
+Es muy útil para comparar variables o grupos cuando queremos una lectura rápida y robusta.
+
+---
+
+# 12. La correlación como medida de asociación lineal
+
+Hasta ahora hemos visto relaciones de forma visual.  
+Ahora las resumiremos con una medida numérica: la correlación.
+
+```{r}
+cor(df[, 1:4])
+```
+
+## Qué mide la correlación
+
+La correlación mide la **fuerza y dirección de la relación lineal** entre dos variables.
+
+Sus valores van entre:
+
+- `1`: relación lineal positiva perfecta,
+- `-1`: relación lineal negativa perfecta,
+- `0`: ausencia de relación lineal.
+
+## Cómo interpretarla
+
+### Correlación positiva alta
+Cuando una variable aumenta, la otra tiende a aumentar.
+
+### Correlación negativa alta
+Cuando una aumenta, la otra tiende a disminuir.
+
+### Correlación cercana a cero
+No hay evidencia de una relación lineal clara.
+
+## Advertencia conceptual
+
+> Correlación no significa causalidad, ni captura todas las formas posibles de relación.
+
+Puede haber relaciones no lineales que la correlación no detecte bien.
+
+---
+
+# 13. Matriz de correlación visual
+
+Ahora veremos la misma información en forma gráfica.
+
+```{r message=FALSE, warning=FALSE}
+library(corrplot)
+corrplot(cor(df[, 1:4]), method = "color", addCoef.col = "black", tl.col = "black")
+```
+
+## Qué representa esta imagen
+
+La matriz de correlación visual resume todo el sistema de relaciones lineales en una sola figura.
+
+## Cómo leerla
+
+- colores intensos indican relaciones fuertes,
+- colores suaves indican relaciones débiles,
+- el signo de la correlación indica si la relación es positiva o negativa.
+
+## Qué puedes preguntar en clase
+
+- ¿Qué pareja de variables está más relacionada?
+- ¿Qué variable parece más conectada con las demás?
+- ¿Hay alguna variable relativamente independiente?
+
+## Idea clave
+
+> Esta matriz es una forma de mapear la dependencia lineal del sistema.
+
+---
+
+# 14. Interpretación sistémica de la correlación
+
+Aquí es donde la clase sube de nivel.
+
+No basta con leer pares de variables.  
+Debemos empezar a pensar el sistema completo.
+
+## Preguntas de nivel superior
+
+- ¿Qué variables parecen dominar la estructura del dataset?
+- ¿Hay grupos de variables que se mueven juntas?
+- ¿La información está muy redundante o cada variable aporta algo distinto?
+
+## Qué decir en clase
+
+> Si varias variables están altamente correlacionadas, el sistema puede tener una estructura más simple de lo que parece.
+
+Esta idea es fundamental porque prepara el camino hacia técnicas como PCA, donde buscamos dimensiones latentes o combinaciones que resumen el sistema.
+
+---
+
+# 15. Coordenadas paralelas: perfiles completos de observaciones
+
+```{r message=FALSE, warning=FALSE}
+library(MASS)
+parcoord(df[, 1:4],
+         col = rainbow(nrow(df)),
+         main = "Coordenadas paralelas de USArrests")
+```
+
+## Qué representa este gráfico
+
+Aquí no vemos relaciones entre variables de dos en dos.  
+Aquí vemos el **perfil completo** de cada observación.
+
+- cada eje vertical es una variable,
+- cada línea es un estado.
+
+## Qué podemos analizar
+
+- observaciones con perfiles similares,
+- estados con comportamiento extremo,
+- patrones de variación conjunta.
+
+## Qué decir en clase
+
+> Mientras la matriz de dispersión compara variables, las coordenadas paralelas comparan observaciones completas.
+
+## Idea de fondo
+
+Este gráfico es útil cuando queremos dejar de pensar solo en variables y empezar a pensar en **configuraciones de observaciones**.
+
+---
+
+# 16. Síntesis conceptual de la clase
+
+En esta clase trabajamos una transición importante:
+
+## Antes
+Mirábamos variables y gráficos por separado.
+
+## Ahora
+Empezamos a interpretar:
+
+- dependencia,
+- asociación lineal,
+- estructura del sistema,
+- perfiles completos de observaciones.
+
+## Resumen de herramientas y su sentido
+
+### Histograma
+Describe la distribución de una variable.
+
+### Densidad kernel
+Muestra la forma suave de la distribución.
+
+### Boxplot
+Resume localización, dispersión y posibles extremos.
+
+### Scatterplot
+Permite proponer hipótesis visuales sobre relación entre variables.
+
+### Correlación
+Cuantifica la asociación lineal.
+
+### Matriz de correlación visual
+Resume la estructura global de relaciones.
+
+### Coordenadas paralelas
+Permiten ver perfiles completos de observaciones.
+
+---
+
+# 17. Preguntas guía para discutir en clase
+
+1. ¿Qué variable parece tener mayor dispersión?
+2. ¿Qué relación entre variables parece más fuerte?
+3. ¿Qué diferencias conceptuales hay entre histograma y densidad?
+4. ¿Qué aporta un boxplot que no aporta un histograma?
+5. ¿Qué significa que dos variables estén correlacionadas?
+6. ¿Por qué una correlación alta no implica causalidad?
+7. ¿Qué variable parece más conectada con el resto?
+8. ¿Qué información nueva aportan las coordenadas paralelas?
+
+---
+
+# 18. Conclusión final
+
+> En análisis multivariado no basta con describir variables; debemos comprender cómo interactúan.
+
+El verdadero salto conceptual ocurre cuando dejamos de ver una tabla como una lista de columnas y empezamos a verla como un sistema con estructura.
+
+Esa estructura puede aparecer:
+
+- visualmente,
+- numéricamente,
+- y conceptualmente.
+
+Y ese será el punto de partida para las siguientes clases.
+
+---
+
+# 19. Próximo paso del curso
+
+En la próxima sesión podremos profundizar en:
+
+- covarianza,
+- relación entre covarianza y correlación,
+- interpretación geométrica,
+- y preparación para reducción de dimensionalidad.

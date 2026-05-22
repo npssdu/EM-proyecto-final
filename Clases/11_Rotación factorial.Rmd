@@ -1,0 +1,570 @@
+---
+title: "Notas de Clase: Rotación Factorial"
+subtitle: "Varimax, Interpretación de Factores y Comparación con PCA"
+author: "Universidad Distrital Francisco José de Caldas"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: cosmo
+    code_folding: show
+    df_print: paged
+    fig_width: 9
+    fig_height: 5.8
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 9,
+  fig.height = 5.8
+)
+```
+
+```{r packages, include=FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(psych)
+library(GGally)
+library(scales)
+```
+
+# Introducción
+
+En la clase anterior se introdujo el análisis factorial como una técnica multivariante orientada a identificar factores latentes que explican las correlaciones entre variables observadas. Se revisaron conceptos fundamentales como variable latente, cargas factoriales, comunalidad, unicidad, scores factoriales y diferencia conceptual entre PCA y análisis factorial.
+
+En esta clase se profundiza en uno de los aspectos más importantes del análisis factorial aplicado: la rotación factorial. La rotación no cambia la esencia estadística del modelo, pero transforma la solución para que los factores sean más interpretables. En términos prácticos, una solución factorial sin rotación puede ser matemáticamente correcta, pero difícil de explicar. La rotación busca simplificar la lectura de las cargas factoriales y facilitar la construcción de significado.
+
+# Objetivos de aprendizaje
+
+Al finalizar esta clase el estudiante estará en capacidad de:
+
+- Explicar por qué se utiliza rotación factorial.
+- Diferenciar una solución factorial sin rotación y una solución rotada.
+- Interpretar la rotación Varimax.
+- Leer cargas factoriales rotadas.
+- Nombrar factores con base en las variables que cargan sobre ellos.
+- Interpretar comunalidades y unicidades después de rotación.
+- Comparar PCA y análisis factorial con mayor profundidad.
+- Elaborar una interpretación aplicada de factores latentes.
+
+# Recordatorio: modelo factorial
+
+El modelo factorial expresa las variables observadas como combinación de factores comunes y una parte específica:
+
+\[
+X = \Lambda F + \epsilon
+\]
+
+donde:
+
+| Símbolo | Significado |
+|---|---|
+| \(X\) | variables observadas |
+| \(F\) | factores latentes |
+| \(\Lambda\) | cargas factoriales |
+| \(\epsilon\) | unicidad, error o parte específica |
+
+La matriz de cargas factoriales \(\Lambda\) es el elemento más importante para la interpretación. Cada carga indica qué tan relacionada está una variable observada con un factor latente. Cuando una variable tiene carga alta en un factor y baja en los demás, la interpretación es clara. Cuando una variable carga moderadamente en varios factores, la interpretación se vuelve difícil.
+
+# ¿Por qué rotar factores?
+
+El análisis factorial busca una estructura simple. Una estructura simple significa que cada variable debería cargar fuertemente en pocos factores y débilmente en los demás. Esto facilita la interpretación porque cada factor queda asociado con un conjunto relativamente claro de variables.
+
+Sin rotación, las cargas factoriales pueden quedar distribuidas entre varios factores. Esto produce factores difíciles de nombrar. La rotación factorial cambia la orientación de los ejes factoriales para obtener una solución más clara. La información esencial se conserva, pero la lectura se vuelve más sencilla.
+
+# Idea geométrica de la rotación
+
+La rotación factorial puede entenderse geométricamente como un cambio en la orientación de los ejes factoriales. Los puntos o variables siguen representando la misma estructura, pero los ejes se giran para alinearse mejor con grupos de variables. Esta idea es parecida a lo visto en PCA, donde los ejes se orientan según direcciones de variabilidad. Sin embargo, en análisis factorial la rotación busca mejorar la interpretación de factores latentes.
+
+Una frase importante es: la rotación no inventa información nueva; reorganiza la solución para que sea más interpretable.
+
+# Tipos de rotación
+
+Existen dos grandes familias de rotación:
+
+## Rotación ortogonal
+
+Mantiene los factores no correlacionados entre sí.
+
+Ejemplos:
+
+- Varimax
+- Quartimax
+- Equamax
+
+## Rotación oblicua
+
+Permite que los factores estén correlacionados.
+
+Ejemplos:
+
+- Oblimin
+- Promax
+
+En esta clase se trabajará principalmente con **Varimax**, una rotación ortogonal ampliamente usada en cursos introductorios y análisis aplicado.
+
+# Rotación Varimax
+
+Varimax busca una estructura donde las cargas sean más extremas: algunas cargas muy altas y otras cercanas a cero. Esto facilita interpretar qué variables pertenecen a cada factor.
+
+La lógica de Varimax puede resumirse así:
+
+- maximiza la claridad de las cargas,
+- facilita que cada variable se asocie principalmente con un factor,
+- mantiene los factores ortogonales,
+- mejora la interpretación semántica.
+
+# Dataset de trabajo: USArrests
+
+Usaremos nuevamente el dataset `USArrests` para mantener continuidad con la clase anterior.
+
+```{r cargar-dataset}
+data("USArrests")
+
+head(USArrests)
+```
+
+# Exploración inicial
+
+```{r estructura}
+str(USArrests)
+summary(USArrests)
+```
+
+# Matriz de correlación
+
+```{r correlacion}
+cor_US <- cor(USArrests)
+
+round(cor_US, 3)
+```
+
+```{r heatmap-correlacion}
+cor_larga <- as.data.frame(as.table(cor_US))
+
+ggplot(cor_larga, aes(Var1, Var2, fill = Freq)) +
+  geom_tile() +
+  scale_fill_gradient2(
+    low = "blue",
+    high = "red",
+    mid = "white",
+    midpoint = 0,
+    limits = c(-1, 1)
+  ) +
+  labs(
+    title = "Matriz de correlación",
+    subtitle = "Relaciones entre variables observadas",
+    x = "",
+    y = "",
+    fill = "Correlación"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+# Adecuación factorial
+
+Antes de interpretar factores, recordamos dos herramientas de adecuación factorial: KMO y Bartlett.
+
+```{r kmo}
+psych::KMO(cor_US)
+```
+
+```{r bartlett}
+psych::cortest.bartlett(cor_US, n = nrow(USArrests))
+```
+
+Un KMO aceptable y una prueba de Bartlett significativa indican que la matriz de correlaciones puede ser razonable para aplicar análisis factorial. Si Bartlett no fuera significativa, significaría que la matriz se parece demasiado a una identidad, lo cual reduce el sentido de buscar factores comunes.
+
+# Autovalores y número de factores
+
+```{r autovalores}
+eigenvalues <- eigen(cor_US)$values
+
+data.frame(
+  Dimension = paste0("Dimensión ", seq_along(eigenvalues)),
+  Autovalor = eigenvalues
+)
+```
+
+```{r scree}
+plot(
+  eigenvalues,
+  type = "b",
+  pch = 19,
+  xlab = "Dimensión",
+  ylab = "Autovalor",
+  main = "Scree Plot"
+)
+
+abline(h = 1, col = "red", lty = 2)
+```
+
+Para este ejemplo se trabajará con dos factores. La decisión se justifica por el criterio de Kaiser, el scree plot y la posibilidad de interpretar dos dimensiones conceptuales.
+
+# Modelo factorial sin rotación
+
+Primero ajustamos un modelo sin rotación.
+
+```{r modelo-sin-rotacion}
+modelo_sin_rotacion <- factanal(
+  USArrests,
+  factors = 2,
+  rotation = "none"
+)
+
+modelo_sin_rotacion
+```
+
+# Cargas factoriales sin rotación
+
+```{r cargas-sin-rotacion}
+loadings_sin <- as.data.frame(unclass(modelo_sin_rotacion$loadings))
+loadings_sin$Variable <- rownames(loadings_sin)
+
+loadings_sin
+```
+
+```{r grafico-cargas-sin}
+loadings_sin_long <- loadings_sin |>
+  pivot_longer(
+    cols = starts_with("Factor"),
+    names_to = "Factor",
+    values_to = "Carga"
+  )
+
+ggplot(loadings_sin_long, aes(x = Variable, y = Carga, fill = Factor)) +
+  geom_col(position = "dodge") +
+  coord_flip() +
+  labs(
+    title = "Cargas factoriales sin rotación",
+    subtitle = "Solución inicial del modelo factorial",
+    x = "Variable",
+    y = "Carga"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+# Interpretación de la solución sin rotación
+
+La solución sin rotación puede mostrar variables con cargas distribuidas en más de un factor. Esto dificulta asignar significado claro a cada factor. En el análisis factorial aplicado, una solución técnicamente válida pero difícil de interpretar puede no ser útil para comunicar resultados.
+
+Por eso se aplica rotación factorial. El objetivo no es cambiar el problema, sino obtener una estructura de cargas más limpia.
+
+# Modelo factorial con rotación Varimax
+
+```{r modelo-varimax}
+modelo_varimax <- factanal(
+  USArrests,
+  factors = 2,
+  rotation = "varimax"
+)
+
+modelo_varimax
+```
+
+# Cargas factoriales rotadas
+
+```{r cargas-varimax}
+loadings_varimax <- as.data.frame(unclass(modelo_varimax$loadings))
+loadings_varimax$Variable <- rownames(loadings_varimax)
+
+loadings_varimax
+```
+
+```{r grafico-cargas-varimax}
+loadings_varimax_long <- loadings_varimax |>
+  pivot_longer(
+    cols = starts_with("Factor"),
+    names_to = "Factor",
+    values_to = "Carga"
+  )
+
+ggplot(loadings_varimax_long, aes(x = Variable, y = Carga, fill = Factor)) +
+  geom_col(position = "dodge") +
+  coord_flip() +
+  labs(
+    title = "Cargas factoriales con rotación Varimax",
+    subtitle = "La rotación busca una estructura más interpretable",
+    x = "Variable",
+    y = "Carga"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+# Comparación antes y después de rotar
+
+```{r comparacion-cargas}
+comparacion <- loadings_sin |>
+  rename(
+    Factor1_sin = Factor1,
+    Factor2_sin = Factor2
+  ) |>
+  left_join(
+    loadings_varimax |>
+      rename(
+        Factor1_varimax = Factor1,
+        Factor2_varimax = Factor2
+      ),
+    by = "Variable"
+  )
+
+comparacion
+```
+
+La tabla permite observar cómo cambian las cargas después de la rotación. En general, se busca que algunas cargas se vuelvan más altas y otras más cercanas a cero. Esta separación ayuda a interpretar los factores.
+
+# Interpretación semántica de factores
+
+La interpretación factorial consiste en revisar qué variables cargan más fuerte sobre cada factor y asignar un nombre conceptual.
+
+En el dataset `USArrests`, puede ocurrir que variables como `Murder`, `Assault` y `Rape` se relacionen con un factor asociado a violencia. Si `UrbanPop` carga principalmente sobre otro factor, podría interpretarse como urbanización o estructura demográfica urbana.
+
+Es importante aclarar que los nombres de factores no son producidos automáticamente por R. El analista propone nombres con base en:
+
+- cargas factoriales,
+- conocimiento del dominio,
+- coherencia conceptual,
+- objetivo del análisis.
+
+# Tabla ordenada de cargas absolutas
+
+```{r cargas-ordenadas}
+loadings_varimax_long |>
+  mutate(Carga_abs = abs(Carga)) |>
+  arrange(Factor, desc(Carga_abs))
+```
+
+Esta tabla ayuda a identificar qué variables dominan cada factor. Las cargas absolutas altas indican variables más importantes para la interpretación del factor.
+
+# Umbral práctico para interpretar cargas
+
+En aplicaciones introductorias, puede usarse como guía:
+
+| Carga absoluta | Interpretación aproximada |
+|---|---|
+| menor a 0.30 | débil |
+| 0.30 a 0.50 | moderada |
+| mayor a 0.50 | fuerte |
+| mayor a 0.70 | muy fuerte |
+
+Estos umbrales no son reglas absolutas, pero ayudan a organizar la lectura.
+
+# Clasificación de variables por factor dominante
+
+```{r factor-dominante}
+factor_dominante <- loadings_varimax_long |>
+  mutate(Carga_abs = abs(Carga)) |>
+  group_by(Variable) |>
+  slice_max(order_by = Carga_abs, n = 1, with_ties = FALSE) |>
+  ungroup() |>
+  arrange(Factor, desc(Carga_abs))
+
+factor_dominante
+```
+
+Esta tabla muestra a qué factor se asocia principalmente cada variable. Es una herramienta práctica para construir interpretación semántica.
+
+# Comunalidad y unicidad
+
+La comunalidad indica qué proporción de la varianza de una variable es explicada por los factores comunes. La unicidad indica la proporción no explicada por los factores comunes.
+
+```{r comunalidad-unicidad}
+unicidades <- modelo_varimax$uniquenesses
+comunalidades <- 1 - unicidades
+
+tabla_comunalidad <- data.frame(
+  Variable = names(unicidades),
+  Unicidad = unicidades,
+  Comunalidad = comunalidades
+)
+
+tabla_comunalidad
+```
+
+```{r grafico-comunalidad}
+tabla_comunalidad |>
+  pivot_longer(
+    cols = c(Unicidad, Comunalidad),
+    names_to = "Medida",
+    values_to = "Valor"
+  ) |>
+  ggplot(aes(x = Variable, y = Valor, fill = Medida)) +
+  geom_col(position = "dodge") +
+  scale_y_continuous(labels = percent_format()) +
+  coord_flip() +
+  labs(
+    title = "Comunalidad y unicidad por variable",
+    subtitle = "Qué tanto explica el modelo factorial",
+    x = "Variable",
+    y = "Proporción"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+Una variable con alta comunalidad está bien representada por el modelo factorial. Una variable con alta unicidad conserva mucha información específica que no está siendo capturada por los factores.
+
+# Scores factoriales con rotación Varimax
+
+Los scores factoriales permiten ubicar cada observación en el espacio de factores. Para obtener scores se ajusta el modelo con `scores = "regression"`.
+
+```{r scores-varimax}
+modelo_scores <- factanal(
+  USArrests,
+  factors = 2,
+  rotation = "varimax",
+  scores = "regression"
+)
+
+scores_df <- as.data.frame(modelo_scores$scores)
+scores_df$Estado <- rownames(USArrests)
+
+head(scores_df)
+```
+
+# Visualización de scores factoriales
+
+```{r grafico-scores}
+ggplot(scores_df, aes(x = Factor1, y = Factor2)) +
+  geom_point(size = 3, alpha = 0.85) +
+  geom_text(aes(label = Estado), size = 3, vjust = -0.5) +
+  labs(
+    title = "Scores factoriales con rotación Varimax",
+    subtitle = "Ubicación de los estados en el espacio de factores",
+    x = "Factor 1",
+    y = "Factor 2"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+Los scores factoriales permiten interpretar observaciones en términos de factores latentes. Por ejemplo, un estado con score alto en el factor de violencia tendría un perfil asociado a mayores tasas en variables que cargan sobre ese factor.
+
+# Comparación entre PCA y análisis factorial rotado
+
+PCA y análisis factorial suelen confundirse porque ambos reducen dimensiones. Sin embargo, tienen propósitos distintos.
+
+```{r pca-comparacion}
+pca <- prcomp(USArrests, scale. = TRUE)
+
+summary(pca)
+```
+
+```{r pca-scores}
+pca_scores <- as.data.frame(pca$x)
+pca_scores$Estado <- rownames(USArrests)
+
+ggplot(pca_scores, aes(x = PC1, y = PC2)) +
+  geom_point(size = 3, alpha = 0.85) +
+  geom_text(aes(label = Estado), size = 3, vjust = -0.5) +
+  labs(
+    title = "PCA sobre USArrests",
+    subtitle = "Componentes principales como reducción de dimensionalidad",
+    x = "PC1",
+    y = "PC2"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+# Diferencias finales entre PCA y análisis factorial
+
+| Aspecto | PCA | Análisis factorial |
+|---|---|---|
+| Objetivo | Reducir dimensionalidad | Identificar factores latentes |
+| Base | Varianza total | Varianza común |
+| Dimensiones | Componentes | Factores |
+| Modelo de error | No explícito | Sí, mediante unicidad |
+| Interpretación | Resumen matemático | Estructura conceptual |
+| Rotación | Puede usarse, pero no es esencial | Muy importante para interpretar |
+
+PCA es útil cuando se quiere resumir información. El análisis factorial es más apropiado cuando se busca interpretar dimensiones ocultas que explican la relación entre variables.
+
+# Errores comunes en análisis factorial
+
+## Error 1: confundir componente con factor
+
+Un componente principal no es lo mismo que un factor latente. El componente resume varianza; el factor intenta explicar correlaciones comunes.
+
+## Error 2: interpretar factores sin revisar cargas
+
+Los factores se interpretan a partir de cargas factoriales. No deben nombrarse de manera arbitraria.
+
+## Error 3: usar análisis factorial sin correlaciones
+
+Si las variables no están correlacionadas, no hay estructura común que explicar.
+
+## Error 4: ignorar comunalidades
+
+Una variable con baja comunalidad no está siendo bien representada por el modelo.
+
+## Error 5: creer que la rotación cambia los datos
+
+La rotación cambia la orientación de los factores, no los datos originales ni la información esencial del modelo.
+
+# Actividad práctica
+
+## Parte 1: comparación de soluciones
+
+1. Ajuste un análisis factorial sin rotación.
+2. Ajuste un análisis factorial con rotación Varimax.
+3. Compare las cargas factoriales.
+4. Explique cuál solución es más interpretable.
+
+## Parte 2: interpretación de factores
+
+1. Identifique las variables que cargan más fuerte sobre cada factor.
+2. Proponga un nombre para cada factor.
+3. Justifique el nombre usando las cargas factoriales.
+4. Identifique variables con alta unicidad.
+
+## Parte 3: scores factoriales
+
+1. Obtenga scores factoriales.
+2. Grafique los estados en el espacio de factores.
+3. Identifique observaciones extremas.
+4. Interprete qué significa tener un score alto en cada factor.
+
+## Parte 4: comparación PCA vs análisis factorial
+
+1. Ejecute PCA sobre el mismo dataset.
+2. Compare los gráficos de PCA y scores factoriales.
+3. Explique por qué PCA y análisis factorial no responden exactamente la misma pregunta.
+
+# Preguntas conceptuales
+
+1. ¿Por qué se rotan los factores?
+2. ¿Qué busca la rotación Varimax?
+3. ¿La rotación cambia los datos originales?
+4. ¿Qué diferencia hay entre una carga alta y una carga baja?
+5. ¿Qué significa que una variable cargue fuertemente en un factor?
+6. ¿Qué significa una alta comunalidad?
+7. ¿Qué significa una alta unicidad?
+8. ¿Cómo se nombran los factores?
+9. ¿Por qué el contexto es importante en análisis factorial?
+10. ¿Cuál es la diferencia final entre PCA y análisis factorial?
+
+# Conclusión
+
+La rotación factorial es una herramienta central para la interpretación del análisis factorial. Aunque el modelo sin rotación puede ser matemáticamente válido, la solución rotada suele ser más clara y más útil para comunicar resultados. Varimax busca una estructura simple en la que las variables carguen fuertemente sobre pocos factores y débilmente sobre los demás.
+
+El análisis factorial no termina cuando se ejecuta la función en R. El verdadero trabajo está en interpretar las cargas, revisar comunalidades, analizar unicidades, nombrar factores y conectar los resultados con el contexto del problema. En ese sentido, el análisis factorial combina estadística, criterio analítico y conocimiento del dominio.
+
+# Cierre del bloque
+
+Con esta clase se completa el núcleo clásico del análisis multivariante visto en el curso:
+
+- visualización multivariante,
+- correlación y covarianza,
+- distribución normal multivariante,
+- distancia de Mahalanobis,
+- PCA,
+- ANOVA,
+- MANOVA,
+- análisis factorial.
+
+La ruta conceptual puede resumirse así: primero se describen las relaciones entre variables, luego se reducen dimensiones, después se comparan grupos y finalmente se interpretan estructuras latentes.

@@ -1,0 +1,471 @@
+---
+title: "Estadística Multidimensional"
+author: "Jhon Alejandro Varón Robayo"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+output:
+  html_document:
+    toc: true
+    toc_depth: '3'
+    df_print: paged
+  html_notebook:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+subtitle: "Clase 3 - Estadística descriptiva multivariada y exploración profunda con
+  iris"
+---
+
+# 1. Apertura de la clase
+
+En la sesión anterior trabajamos con:
+
+- vectores,
+- matrices,
+- data frames,
+- exploración inicial de datasets,
+- visualización básica en R.
+
+Hoy daremos un paso más: estudiaremos cómo describir **varias variables al mismo tiempo** usando herramientas de estadística descriptiva multivariada.
+
+# 2. Objetivo de la clase
+
+Al finalizar esta clase, el estudiante estará en capacidad de:
+
+- reconocer una matriz de datos multivariada,
+- identificar el rol de las variables cuantitativas,
+- calcular medidas descriptivas básicas de varias variables,
+- interpretar la matriz de covarianza y la matriz de correlación,
+- visualizar patrones bivariados y multivariados,
+- comprender por qué estas herramientas son la base de técnicas como PCA y clustering.
+
+# 3. Recordatorio conceptual
+
+En estadística:
+
+- el análisis **univariado** estudia una variable,
+- el análisis **bivariado** estudia dos variables y su relación,
+- el análisis **multivariado** estudia varias variables simultáneamente.
+
+En esta clase trabajaremos sobre todo en la transición entre lo bivariado y lo multivariado.
+
+# 4. Cargar el dataset iris
+
+Trabajaremos con un dataset clásico incluido en R.
+
+```{r}
+data(iris)
+head(iris)
+```
+
+## 4.1 Interpretación inicial
+
+Cada fila representa una observación, en este caso una flor.
+
+Cada columna representa una variable:
+
+- Sepal.Length
+- Sepal.Width
+- Petal.Length
+- Petal.Width
+- Species
+
+Las primeras cuatro son variables numéricas y la última es una variable categórica.
+
+# 5. Estructura del dataset
+
+```{r}
+str(iris)
+```
+
+## 5.1 Qué debemos observar
+
+Aquí debemos identificar:
+
+- cuántas variables son numéricas,
+- cuál variable es categórica,
+- y por qué en estadística multivariada muchas veces trabajamos primero con las variables cuantitativas.
+
+# 6. Dimensión del dataset
+
+```{r}
+dim(iris)
+nrow(iris)
+ncol(iris)
+```
+
+## 6.1 Interpretación
+
+El dataset tiene 150 observaciones y 5 variables.
+
+Sin embargo, para la mayor parte del análisis descriptivo multivariado trabajaremos con las 4 variables numéricas.
+
+# 7. Selección de variables numéricas
+
+```{r}
+iris_num <- iris[, 1:4]
+head(iris_num)
+```
+
+## 7.1 Interpretación matricial
+
+Podemos pensar este conjunto de datos como una matriz:
+
+X_(n x p)
+
+donde:
+
+- n = número de observaciones
+- p = número de variables
+
+En este caso:
+
+- n = 150
+- p = 4
+
+# 8. Resumen descriptivo general
+
+```{r}
+summary(iris_num)
+```
+
+## 8.1 Qué interpretar
+
+Aquí observamos, para cada variable:
+
+- mínimo
+- primer cuartil
+- mediana
+- media aproximada
+- tercer cuartil
+- máximo
+
+Estas medidas permiten una primera lectura de localización y dispersión.
+
+# 9. Vector de medias
+
+```{r}
+colMeans(iris_num)
+```
+
+## 9.1 Interpretación estadística
+
+Este resultado corresponde al **vector de medias** de las variables.
+
+En estadística multivariada, el vector de medias resume la localización promedio del conjunto de observaciones en el espacio de variables.
+
+# 10. Desviaciones estándar
+
+```{r}
+apply(iris_num, 2, sd)
+```
+
+## 10.1 Interpretación estadística
+
+La desviación estándar mide qué tan dispersos están los datos alrededor de la media.
+
+Una mayor desviación estándar indica mayor variabilidad en esa variable.
+
+# 11. Varianzas
+
+```{r}
+apply(iris_num, 2, var)
+```
+
+## 11.1 Interpretación
+
+La varianza es otra medida de dispersión y se relaciona con la desviación estándar como su cuadrado.
+
+En análisis multivariado, la varianza de cada variable aparece en la diagonal de la matriz de covarianza.
+
+# 12. Matriz de covarianza
+
+```{r}
+cov(iris_num)
+```
+
+## 12.1 Qué es la covarianza
+
+La covarianza mide cómo varían juntas dos variables.
+
+- Si la covarianza es positiva, tienden a crecer juntas.
+- Si la covarianza es negativa, una tiende a crecer cuando la otra disminuye.
+- Si la covarianza es cercana a cero, no hay una relación lineal clara.
+
+## 12.2 Qué observar en la matriz
+
+- La diagonal contiene las varianzas.
+- Fuera de la diagonal están las covarianzas entre pares de variables.
+
+# 13. Matriz de correlación
+
+```{r}
+cor(iris_num)
+```
+
+## 13.1 Qué es la correlación
+
+La correlación es una versión estandarizada de la covarianza.
+
+Siempre toma valores entre:
+
+- -1
+- 1
+
+## 13.2 Guía de interpretación
+
+- valores cercanos a 1: relación positiva fuerte
+- valores cercanos a -1: relación negativa fuerte
+- valores cercanos a 0: relación lineal débil
+
+## 13.3 Pregunta para discusión
+
+¿Qué par de variables parece tener la relación lineal más fuerte?
+
+# 14. Visualización univariada
+
+## 14.1 Histograma de Sepal.Length
+
+```{r}
+hist(iris$Sepal.Length,
+     main = "Histograma de Sepal.Length",
+     xlab = "Sepal.Length",
+     ylab = "Frecuencia")
+```
+
+## 14.2 Qué decir
+
+El histograma permite ver:
+
+- la forma de la distribución,
+- concentración de valores,
+- posibles asimetrías,
+- y dispersión.
+
+## 14.3 Boxplot de Sepal.Width
+
+```{r}
+boxplot(iris$Sepal.Width,
+        main = "Boxplot de Sepal.Width",
+        ylab = "Sepal.Width")
+```
+
+## 14.4 Qué decir
+
+El boxplot permite observar:
+
+- mediana,
+- rango intercuartílico,
+- y posibles valores atípicos.
+
+# 15. Visualización bivariada
+
+## 15.1 Petal.Length vs Petal.Width
+
+```{r}
+plot(iris$Petal.Length, iris$Petal.Width,
+     main = "Petal.Length vs Petal.Width",
+     xlab = "Petal.Length",
+     ylab = "Petal.Width",
+     pch = 19)
+```
+
+## 15.2 Interpretación sugerida
+
+Este gráfico permite identificar:
+
+- si existe relación entre ambas variables,
+- si esa relación parece lineal,
+- y si hay indicios de grupos naturales.
+
+## 15.3 Sepal.Length vs Sepal.Width
+
+```{r}
+plot(iris$Sepal.Length, iris$Sepal.Width,
+     main = "Sepal.Length vs Sepal.Width",
+     xlab = "Sepal.Length",
+     ylab = "Sepal.Width",
+     pch = 19)
+```
+
+## 15.4 Pregunta para la clase
+
+¿La relación entre estas variables parece tan fuerte como en el gráfico anterior?
+
+# 16. Visualización multivariada
+
+## 16.1 Matriz de dispersión
+
+```{r}
+pairs(iris_num,
+      main = "Matriz de dispersión del dataset iris")
+```
+
+## 16.2 Qué observar
+
+Esta visualización permite analizar simultáneamente:
+
+- todas las relaciones bivariadas,
+- la forma de las distribuciones,
+- patrones de dependencia,
+- y posibles agrupamientos.
+
+## 16.3 Idea clave
+
+La matriz de dispersión es una de las herramientas exploratorias más importantes antes de aplicar métodos multivariados formales.
+
+# 17. Exploración por especie
+
+Hasta ahora hemos analizado el dataset completo. Ahora veremos el papel de la variable categórica Species.
+
+```{r}
+table(iris$Species)
+```
+
+## 17.1 Interpretación
+
+La tabla muestra cuántas flores hay de cada especie.
+
+Esto es importante porque más adelante analizaremos cómo ciertas variables ayudan a distinguir grupos.
+
+# 18. Promedios por especie
+
+```{r}
+aggregate(iris[, 1:4], by = list(Especie = iris$Species), mean)
+```
+
+## 18.1 Qué interpretar
+
+Aquí vemos el promedio de cada variable por especie.
+
+Pregunta para la clase:
+
+¿En qué variables parecen diferenciarse más las especies?
+
+# 19. Boxplot por especie
+
+```{r}
+boxplot(Petal.Length ~ Species, data = iris,
+        main = "Petal.Length por especie",
+        xlab = "Species",
+        ylab = "Petal.Length")
+```
+
+## 19.1 Interpretación
+
+Este gráfico permite comparar una variable entre grupos.
+
+Aquí podemos ver si las especies presentan diferencias claras en la longitud del pétalo.
+
+# 20. Scatterplot con color por especie
+
+```{r}
+colores <- c("red", "blue", "darkgreen")
+plot(iris$Petal.Length, iris$Petal.Width,
+     col = colores[iris$Species],
+     pch = 19,
+     main = "Petal.Length vs Petal.Width por especie",
+     xlab = "Petal.Length",
+     ylab = "Petal.Width")
+legend("topleft",
+       legend = levels(iris$Species),
+       col = colores,
+       pch = 19)
+```
+
+## 20.1 Qué decir
+
+Ahora podemos ver mejor que las observaciones no están mezcladas al azar: existe estructura y agrupamiento según especie.
+
+Esta es una idea central en estadística multivariada:
+
+las variables, vistas de manera conjunta, pueden revelar patrones que no se ven claramente al estudiar una sola variable.
+
+# 21. Síntesis estadística de la clase
+
+Hasta aquí ya tenemos las bases de la estadística descriptiva multivariada:
+
+- vector de medias,
+- varianzas,
+- desviaciones estándar,
+- matriz de covarianza,
+- matriz de correlación,
+- gráficos univariados,
+- gráficos bivariados,
+- visualización multivariada.
+
+# 22. Actividad guiada para estudiantes
+
+Con el dataset `iris`, realizar lo siguiente:
+
+1. calcular el vector de medias,
+2. calcular la desviación estándar de cada variable,
+3. calcular la matriz de covarianza,
+4. calcular la matriz de correlación,
+5. construir un histograma,
+6. construir un scatterplot,
+7. construir una matriz de dispersión,
+8. escribir tres conclusiones estadísticas.
+
+# 23. Solución guiada
+
+```{r}
+colMeans(iris_num)
+apply(iris_num, 2, sd)
+cov(iris_num)
+cor(iris_num)
+
+hist(iris$Petal.Length,
+     main = "Histograma de Petal.Length",
+     xlab = "Petal.Length",
+     ylab = "Frecuencia")
+
+plot(iris$Sepal.Length, iris$Petal.Length,
+     main = "Sepal.Length vs Petal.Length",
+     xlab = "Sepal.Length",
+     ylab = "Petal.Length",
+     pch = 19)
+
+pairs(iris_num,
+      main = "Matriz de dispersión")
+```
+
+# 24. Preguntas para discusión en clase
+
+1. ¿Qué variable presenta mayor dispersión?
+2. ¿Qué relación lineal parece más fuerte?
+3. ¿Por qué la covarianza por sí sola puede ser difícil de comparar?
+4. ¿Por qué la correlación suele ser más fácil de interpretar?
+5. ¿Qué patrones se observan cuando incorporamos la especie?
+
+# 25. Ideas clave de la sesión
+
+Al finalizar esta clase, el estudiante debe comprender que:
+
+- los datos multivariados se representan como matrices,
+- el vector de medias resume localización,
+- la matriz de covarianza resume variación conjunta,
+- la matriz de correlación resume asociación lineal,
+- la exploración gráfica permite detectar patrones, relaciones y grupos,
+- estas herramientas son la base de PCA, clustering y otros métodos multivariados.
+
+# 26. Tarea sugerida
+
+Usar un dataset de interés propio y realizar:
+
+1. selección de variables numéricas,
+2. cálculo de medias,
+3. cálculo de desviaciones estándar,
+4. matriz de covarianza,
+5. matriz de correlación,
+6. un histograma,
+7. un scatterplot,
+8. una breve interpretación de resultados.
+
+# 27. Próxima clase
+
+En la siguiente sesión profundizaremos en:
+
+- dependencia entre variables,
+- interpretación geométrica,
+- distancia multivariada,
+- y conexiones con la distribución normal multivariante.

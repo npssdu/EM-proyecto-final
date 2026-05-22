@@ -1,0 +1,529 @@
+---
+title: "Notas de Clase: ANOVA"
+subtitle: "Análisis de Varianza como puente hacia MANOVA"
+author: "Universidad Distrital Francisco José de Caldas"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: cosmo
+    df_print: paged
+    code_folding: show
+    fig_width: 9
+    fig_height: 5.8
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 9,
+  fig.height = 5.8
+)
+```
+
+```{r packages, include=FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(scales)
+```
+
+# Introducción
+
+En estadística aplicada es frecuente comparar grupos. Por ejemplo, se puede comparar el rendimiento promedio de varios algoritmos, la productividad de varios procesos, el efecto de diferentes tratamientos, el comportamiento de clientes por segmento o las características de distintas especies. Cuando el problema involucra una variable numérica y una variable categórica con varios grupos, una de las técnicas clásicas más importantes es el **Análisis de Varianza**, conocido como **ANOVA**.
+
+Aunque su nombre hace referencia a la varianza, ANOVA se utiliza principalmente para comparar medias. La idea central consiste en evaluar si las diferencias observadas entre las medias de varios grupos son suficientemente grandes en comparación con la variabilidad natural que existe dentro de los grupos. Por tanto, ANOVA no compara medias de forma aislada, sino que analiza la relación entre variabilidad explicada por los grupos y variabilidad no explicada o interna.
+
+# Objetivos de aprendizaje
+
+Al finalizar esta clase, el estudiante estará en capacidad de:
+
+- Explicar qué problema resuelve ANOVA.
+- Diferenciar la variabilidad entre grupos y dentro de grupos.
+- Formular las hipótesis estadísticas de un ANOVA de una vía.
+- Interpretar el estadístico F y el valor p.
+- Aplicar ANOVA en R usando datos reales.
+- Validar supuestos básicos del modelo.
+- Interpretar comparaciones post-hoc mediante Tukey.
+- Entender por qué ANOVA es el puente natural hacia MANOVA.
+
+# Problema que resuelve ANOVA
+
+Supóngase que se tienen tres o más grupos y se desea comparar una variable numérica entre ellos. Una primera idea podría ser realizar varias pruebas t por pares. Sin embargo, este procedimiento incrementa el riesgo de cometer error tipo I, es decir, aumenta la probabilidad de concluir que existe una diferencia cuando realmente no la hay.
+
+ANOVA resuelve este problema mediante una prueba global. En lugar de hacer muchas comparaciones separadas al inicio, formula una pregunta general: ¿existe evidencia estadística de que al menos una media grupal es diferente? Si el resultado global es significativo, entonces pueden realizarse comparaciones post-hoc para identificar entre cuáles grupos aparecen las diferencias.
+
+# Hipótesis del ANOVA de una vía
+
+En un ANOVA de una vía se tiene una variable dependiente numérica y un factor categórico con $k$ grupos. Las hipótesis son:
+
+$$
+H_0: \mu_1 = \mu_2 = \cdots = \mu_k
+$$
+
+$$
+H_1: \text{al menos una media es diferente}
+$$
+
+La hipótesis nula afirma que todas las medias poblacionales son iguales. La hipótesis alternativa no dice que todas sean diferentes; únicamente indica que al menos una media difiere de las demás. Esta distinción es importante porque ANOVA no identifica por sí solo cuáles grupos son diferentes. Para eso se usan pruebas posteriores como Tukey HSD.
+
+# Idea central: señal contra ruido
+
+La lógica de ANOVA puede entenderse como una comparación entre señal y ruido. La señal corresponde a las diferencias entre grupos. El ruido corresponde a la variabilidad natural dentro de cada grupo. Si las medias de los grupos están muy separadas, pero dentro de cada grupo los datos son poco dispersos, entonces hay evidencia fuerte de diferencias. Si los grupos tienen medias algo distintas, pero internamente son muy variables, entonces la diferencia puede no ser estadísticamente clara.
+
+La fórmula conceptual del estadístico F es:
+
+$$
+F =
+\frac{
+\text{variabilidad entre grupos}
+}{
+\text{variabilidad dentro de grupos}
+}
+$$
+
+Cuando $F$ es cercano a 1, la variabilidad entre grupos no supera de manera importante la variabilidad interna. Cuando $F$ es grande, la variabilidad entre grupos es mayor que el ruido interno y puede existir evidencia contra la hipótesis nula.
+
+# Descomposición de la variabilidad
+
+ANOVA descompone la variabilidad total de los datos en dos partes:
+
+$$
+SS_T = SS_B + SS_W
+$$
+
+donde:
+
+- $SS_T$: suma de cuadrados total.
+- $SS_B$: suma de cuadrados entre grupos.
+- $SS_W$: suma de cuadrados dentro de grupos.
+
+La suma de cuadrados total mide la variabilidad global de todos los datos respecto a la media general. La suma de cuadrados entre grupos mide cuánto se alejan las medias grupales de la media general. La suma de cuadrados dentro de grupos mide cuánto varían los individuos respecto a la media de su propio grupo.
+
+# Grados de libertad y cuadrados medios
+
+Cada suma de cuadrados se asocia con grados de libertad. En un ANOVA de una vía:
+
+$$
+gl_{entre} = k - 1
+$$
+
+$$
+gl_{dentro} = n - k
+$$
+
+Los cuadrados medios se calculan dividiendo cada suma de cuadrados por sus grados de libertad:
+
+$$
+MS_{entre} = \frac{SS_B}{k-1}
+$$
+
+$$
+MS_{dentro} = \frac{SS_W}{n-k}
+$$
+
+Finalmente, el estadístico F se calcula como:
+
+$$
+F = \frac{MS_{entre}}{MS_{dentro}}
+$$
+
+# Dataset de trabajo: Iris
+
+Usaremos el dataset `iris`, incluido por defecto en R. Este conjunto de datos contiene mediciones de flores de tres especies:
+
+- setosa
+- versicolor
+- virginica
+
+Las variables numéricas son:
+
+- `Sepal.Length`
+- `Sepal.Width`
+- `Petal.Length`
+- `Petal.Width`
+
+La variable categórica es:
+
+- `Species`
+
+```{r cargar-iris}
+data(iris)
+
+head(iris)
+```
+
+```{r estructura-iris}
+str(iris)
+summary(iris)
+```
+
+# Exploración descriptiva
+
+Antes de aplicar ANOVA, se debe explorar visualmente la relación entre la variable numérica y el factor categórico. Comenzaremos analizando `Sepal.Length` según la especie.
+
+```{r resumen-grupos}
+iris |>
+  group_by(Species) |>
+  summarise(
+    n = n(),
+    media = mean(Sepal.Length),
+    mediana = median(Sepal.Length),
+    desviacion = sd(Sepal.Length),
+    minimo = min(Sepal.Length),
+    maximo = max(Sepal.Length)
+  )
+```
+
+La tabla anterior muestra medidas descriptivas por grupo. Si las medias son distintas, puede existir una diferencia entre especies. Sin embargo, la diferencia descriptiva no es suficiente para concluir estadísticamente. ANOVA permite evaluar si la diferencia observada es suficientemente grande respecto a la variabilidad interna.
+
+# Visualización con boxplot
+
+```{r boxplot-sepal-length}
+ggplot(iris, aes(x = Species, y = Sepal.Length, fill = Species)) +
+  geom_boxplot(alpha = 0.75) +
+  geom_jitter(width = 0.12, alpha = 0.55) +
+  labs(
+    title = "Longitud del sépalo por especie",
+    subtitle = "Comparación visual de la variable Sepal.Length entre grupos",
+    x = "Especie",
+    y = "Longitud del sépalo"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "none")
+```
+
+El boxplot permite observar diferencias en medianas, dispersión y posibles valores atípicos. Si las cajas están muy separadas, podría esperarse una diferencia entre grupos. Si las cajas se superponen fuertemente, la diferencia podría ser menos clara. Aun así, la decisión final debe apoyarse en una prueba estadística.
+
+# Visualización de medias e intervalos
+
+```{r medias-intervalos}
+ggplot(iris, aes(x = Species, y = Sepal.Length, color = Species)) +
+  stat_summary(fun = mean, geom = "point", size = 4) +
+  stat_summary(fun.data = mean_cl_normal, geom = "errorbar", width = 0.18, linewidth = 1) +
+  labs(
+    title = "Media e intervalo aproximado por especie",
+    subtitle = "Visualización de diferencias promedio en Sepal.Length",
+    x = "Especie",
+    y = "Longitud del sépalo"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "none")
+```
+
+Esta visualización muestra la media de cada grupo y un intervalo aproximado alrededor de ella. Sirve para observar diferencias promedio de manera más directa. Sin embargo, debe recordarse que la inferencia formal se realiza mediante el modelo ANOVA.
+
+# Modelo ANOVA en R
+
+El modelo de ANOVA de una vía puede escribirse como:
+
+$$
+Y_{ij} = \mu + \tau_i + \varepsilon_{ij}
+$$
+
+donde:
+
+- $Y_{ij}$: observación $j$ del grupo $i$.
+- $\mu$: media general.
+- $\tau_i$: efecto del grupo $i$.
+- $\varepsilon_{ij}$: error aleatorio.
+
+En R se ajusta con la función `aov()`:
+
+```{r modelo-anova}
+modelo <- aov(Sepal.Length ~ Species, data = iris)
+
+summary(modelo)
+```
+
+# Interpretación de la tabla ANOVA
+
+La tabla ANOVA contiene varias columnas importantes:
+
+- `Df`: grados de libertad.
+- `Sum Sq`: suma de cuadrados.
+- `Mean Sq`: cuadrados medios.
+- `F value`: estadístico F.
+- `Pr(>F)`: valor p.
+
+El valor p permite evaluar la hipótesis nula. Si el valor p es menor que el nivel de significancia, por ejemplo 0.05, se rechaza la hipótesis de igualdad de medias. Esto indica que existe evidencia estadística de que al menos una especie tiene una media de `Sepal.Length` diferente.
+
+# Decisión estadística
+
+Para una significancia de $\alpha = 0.05$:
+
+```{r decision-anova}
+anova_tabla <- summary(modelo)[[1]]
+p_valor <- anova_tabla$`Pr(>F)`[1]
+
+p_valor
+
+if (p_valor < 0.05) {
+  "Se rechaza H0: existe evidencia de diferencias entre medias."
+} else {
+  "No se rechaza H0: no hay evidencia suficiente de diferencias entre medias."
+}
+```
+
+La conclusión debe expresarse con cuidado. Rechazar $H_0$ no significa demostrar de manera absoluta que todas las medias sean distintas. Significa que, bajo el modelo y los supuestos, la evidencia observada es poco compatible con la igualdad de medias.
+
+# Tamaño del efecto: eta cuadrado
+
+Además del valor p, es útil medir el tamaño del efecto. Una medida común es eta cuadrado:
+
+$$
+\eta^2 =
+\frac{SS_{entre}}{SS_{total}}
+$$
+
+Eta cuadrado representa la proporción de variabilidad total explicada por el factor.
+
+```{r eta-cuadrado}
+SS_entre <- anova_tabla$`Sum Sq`[1]
+SS_dentro <- anova_tabla$`Sum Sq`[2]
+SS_total <- SS_entre + SS_dentro
+
+eta2 <- SS_entre / SS_total
+
+eta2
+```
+
+Un valor alto de $\eta^2$ indica que una proporción importante de la variabilidad de la variable respuesta se asocia con el factor. Esto complementa el valor p, porque el valor p indica significancia estadística, mientras que el tamaño del efecto ayuda a interpretar relevancia práctica.
+
+# Comparaciones post-hoc: Tukey HSD
+
+ANOVA indica si hay evidencia de diferencias globales, pero no dice entre cuáles grupos se encuentran esas diferencias. Para esto se utilizan comparaciones post-hoc. Una de las pruebas más comunes es Tukey HSD.
+
+```{r tukey}
+tukey <- TukeyHSD(modelo)
+
+tukey
+```
+
+# Visualización de Tukey
+
+```{r plot-tukey}
+plot(tukey)
+```
+
+La prueba de Tukey compara todos los pares de grupos controlando el error por comparaciones múltiples. En cada comparación se reporta una diferencia de medias, un intervalo de confianza y un valor p ajustado. Si el intervalo de confianza no contiene cero y el valor p ajustado es menor que 0.05, la diferencia entre ese par de grupos se considera estadísticamente significativa.
+
+# Supuestos del ANOVA
+
+ANOVA se apoya en tres supuestos principales:
+
+1. Independencia de observaciones.
+2. Normalidad de los residuos.
+3. Homogeneidad de varianzas entre grupos.
+
+La independencia depende principalmente del diseño de recolección de datos. La normalidad y la homogeneidad pueden evaluarse con diagnósticos gráficos y pruebas complementarias.
+
+# Residuos del modelo
+
+Los residuos son las diferencias entre los valores observados y los valores ajustados por el modelo:
+
+$$
+e_i = y_i - \hat{y}_i
+$$
+
+```{r residuos}
+iris$residuos_modelo <- residuals(modelo)
+iris$ajustados_modelo <- fitted(modelo)
+
+head(iris)
+```
+
+# Diagnóstico gráfico del modelo
+
+```{r diagnostico-base}
+par(mfrow = c(2, 2))
+plot(modelo)
+par(mfrow = c(1, 1))
+```
+
+Los gráficos diagnósticos permiten revisar:
+
+- patrones en residuos,
+- desviaciones fuertes de normalidad,
+- heterogeneidad de varianza,
+- observaciones influyentes.
+
+Si los supuestos se incumplen fuertemente, pueden considerarse alternativas como transformaciones, pruebas no paramétricas o modelos robustos.
+
+# Normalidad de residuos
+
+```{r qq-residuos}
+ggplot(iris, aes(sample = residuos_modelo)) +
+  stat_qq() +
+  stat_qq_line() +
+  labs(
+    title = "QQ plot de residuos",
+    subtitle = "Evaluación visual de normalidad",
+    x = "Cuantiles teóricos",
+    y = "Cuantiles observados"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+En un QQ plot, si los puntos siguen aproximadamente la línea, la normalidad de los residuos es razonable. Si hay desviaciones fuertes, especialmente en los extremos, puede existir evidencia de no normalidad.
+
+# Prueba de normalidad de Shapiro-Wilk
+
+```{r shapiro}
+shapiro.test(residuals(modelo))
+```
+
+La prueba de Shapiro-Wilk evalúa la hipótesis nula de normalidad. Si el valor p es menor que 0.05, se rechaza la normalidad. Sin embargo, esta prueba puede ser sensible al tamaño muestral. Por eso debe interpretarse junto con el QQ plot y el contexto del problema.
+
+# Homogeneidad de varianzas
+
+Una revisión descriptiva puede hacerse calculando varianzas por grupo:
+
+```{r varianzas-grupo}
+iris |>
+  group_by(Species) |>
+  summarise(
+    varianza = var(Sepal.Length),
+    desviacion = sd(Sepal.Length)
+  )
+```
+
+También puede usarse la prueba de Bartlett, apropiada cuando se asume normalidad:
+
+```{r bartlett}
+bartlett.test(Sepal.Length ~ Species, data = iris)
+```
+
+La hipótesis nula de Bartlett afirma que las varianzas de los grupos son iguales. Si el valor p es bajo, puede haber evidencia de heterogeneidad de varianzas.
+
+# ANOVA para otras variables
+
+Ahora se repite el análisis para otras variables del dataset. Esto permite observar que una misma estructura de grupos puede tener efectos distintos dependiendo de la variable dependiente.
+
+## Petal.Length
+
+```{r anova-petal-length}
+modelo_petal_length <- aov(Petal.Length ~ Species, data = iris)
+
+summary(modelo_petal_length)
+TukeyHSD(modelo_petal_length)
+```
+
+## Petal.Width
+
+```{r anova-petal-width}
+modelo_petal_width <- aov(Petal.Width ~ Species, data = iris)
+
+summary(modelo_petal_width)
+TukeyHSD(modelo_petal_width)
+```
+
+## Sepal.Width
+
+```{r anova-sepal-width}
+modelo_sepal_width <- aov(Sepal.Width ~ Species, data = iris)
+
+summary(modelo_sepal_width)
+TukeyHSD(modelo_sepal_width)
+```
+
+# Comparación de resultados entre variables
+
+```{r comparar-modelos}
+extraer_anova <- function(modelo, variable) {
+  tabla <- summary(modelo)[[1]]
+  data.frame(
+    Variable = variable,
+    F = tabla$`F value`[1],
+    p_valor = tabla$`Pr(>F)`[1],
+    SS_entre = tabla$`Sum Sq`[1],
+    SS_dentro = tabla$`Sum Sq`[2],
+    eta2 = tabla$`Sum Sq`[1] / sum(tabla$`Sum Sq`)
+  )
+}
+
+comparacion <- bind_rows(
+  extraer_anova(modelo, "Sepal.Length"),
+  extraer_anova(modelo_sepal_width, "Sepal.Width"),
+  extraer_anova(modelo_petal_length, "Petal.Length"),
+  extraer_anova(modelo_petal_width, "Petal.Width")
+)
+
+comparacion
+```
+
+```{r grafico-eta2}
+ggplot(comparacion, aes(x = reorder(Variable, eta2), y = eta2, fill = Variable)) +
+  geom_col(alpha = 0.85) +
+  coord_flip() +
+  scale_y_continuous(labels = percent_format()) +
+  labs(
+    title = "Tamaño del efecto por variable",
+    subtitle = "Eta cuadrado: proporción de variabilidad explicada por Species",
+    x = "Variable",
+    y = "Eta cuadrado"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "none")
+```
+
+Este análisis muestra que la especie puede explicar con diferente intensidad cada variable. Algunas variables pueden separar muy bien los grupos, mientras que otras pueden mostrar una separación más débil. Esto prepara la transición hacia MANOVA, donde se analizan varias variables dependientes simultáneamente.
+
+# Relación entre ANOVA y MANOVA
+
+ANOVA analiza una sola variable dependiente a la vez. MANOVA extiende esta lógica al caso en que existen varias variables dependientes simultáneamente. En el dataset Iris, ANOVA puede analizar `Sepal.Length`, `Sepal.Width`, `Petal.Length` o `Petal.Width` por separado. MANOVA, en cambio, permite analizar el perfil completo de mediciones florales al mismo tiempo.
+
+La idea conceptual es:
+
+$$
+\text{ANOVA: una variable respuesta}
+$$
+
+$$
+\text{MANOVA: varias variables respuesta}
+$$
+
+Por eso ANOVA es el puente natural hacia MANOVA. Antes de comparar perfiles multivariantes completos, es necesario entender cómo se comparan grupos con una sola variable respuesta.
+
+# Actividad práctica
+
+## Parte 1: análisis individual
+
+Usando el dataset `iris`, seleccione una variable numérica diferente a `Sepal.Length` y realice:
+
+1. Gráfico boxplot por especie.
+2. Modelo ANOVA.
+3. Interpretación del valor p.
+4. Cálculo de Tukey HSD.
+5. Interpretación de comparaciones por pares.
+6. Revisión de supuestos.
+
+## Parte 2: interpretación conceptual
+
+Responda:
+
+1. ¿Qué problema resuelve ANOVA?
+2. ¿Por qué no es recomendable hacer muchas pruebas t por pares?
+3. ¿Qué representa la variabilidad entre grupos?
+4. ¿Qué representa la variabilidad dentro de grupos?
+5. ¿Qué significa un estadístico F grande?
+6. ¿Qué significa rechazar la hipótesis nula?
+7. ¿Por qué ANOVA no indica directamente cuáles grupos son diferentes?
+8. ¿Qué aporta Tukey HSD?
+9. ¿Qué diferencia existe entre significancia estadística y tamaño del efecto?
+10. ¿Por qué ANOVA prepara el camino hacia MANOVA?
+
+# Conclusión
+
+ANOVA es una herramienta fundamental para comparar grupos cuando se tiene una variable respuesta numérica y un factor categórico. Su lógica se basa en comparar la variabilidad entre grupos con la variabilidad dentro de grupos. Si la variabilidad explicada por los grupos es suficientemente grande frente al ruido interno, se obtiene evidencia estadística de diferencias.
+
+El valor p permite evaluar significancia estadística, mientras que medidas como eta cuadrado ayudan a interpretar la magnitud del efecto. Las pruebas post-hoc como Tukey permiten identificar entre qué grupos se encuentran las diferencias. Finalmente, ANOVA constituye el puente conceptual hacia MANOVA, donde el análisis se extiende a varias variables dependientes simultáneamente.
+
+# Próxima clase sugerida
+
+La siguiente clase debe abordar **MANOVA**, partiendo de la lógica ya desarrollada en ANOVA. El objetivo será comparar grupos no sólo con una variable, sino con un conjunto completo de variables dependientes, respetando la estructura multivariante de los datos.

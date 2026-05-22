@@ -1,0 +1,971 @@
+---
+title: "Estadística Multidimensional - Datos Multivariantes"
+author: "Clase"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Propósito de la clase
+
+En estadística multivariante, cada observación no se describe con un solo valor, sino con **varias variables al mismo tiempo**.  
+Por eso, el análisis ya no se limita a estudiar una distribución aislada, sino a comprender:
+
+- cómo se distribuye cada variable,
+- cómo cambian las variables entre sí,
+- cómo se comportan conjuntamente las observaciones,
+- y qué patrones, grupos o atípicos aparecen cuando se consideran varias dimensiones a la vez.
+
+En este documento se desarrolla el bloque de **Datos multivariantes** usando el conjunto de datos `iris`, porque contiene:
+
+- 4 variables numéricas continuas:
+  - `Sepal.Length`
+  - `Sepal.Width`
+  - `Petal.Length`
+  - `Petal.Width`
+- 1 variable categórica:
+  - `Species`
+
+Esto permite combinar **explicación conceptual**, **visualización**, **interpretación** y **medidas descriptivas multivariantes**.
+
+# Preparación del entorno
+
+```{r}
+rm(list = ls())
+data("iris")
+
+head(iris)
+str(iris)
+summary(iris)
+
+datos_num <- iris[, 1:4]
+grupo <- iris$Species
+```
+
+## Qué se debe entender aquí
+
+El dataset `iris` tiene 150 observaciones. Cada fila corresponde a una flor. Cada flor tiene varias medidas numéricas.  
+Eso significa que cada observación puede verse como un **vector**:
+
+\[
+x_i = (x_{i1}, x_{i2}, x_{i3}, x_{i4})
+\]
+
+En este caso, una flor no está representada por un solo dato, sino por un conjunto de mediciones simultáneas.
+
+## Idea central
+
+En análisis multivariante:
+
+- una observación = un vector,
+- el conjunto de observaciones = una nube de puntos,
+- el espacio donde viven esos puntos tiene tantas dimensiones como variables numéricas.
+
+Como no podemos ver directamente espacios de 4, 5 o más dimensiones, usamos:
+
+- gráficos parciales,
+- resúmenes numéricos,
+- medidas de localización, dispersión y dependencia.
+
+# Visualización en el espacio
+
+## Qué es
+
+La visualización en el espacio representa cada observación como un punto.  
+Cada eje corresponde a una variable.
+
+- Con 2 variables, se observa un plano.
+- Con 3 variables, se observa un espacio tridimensional.
+- Con más de 3 variables, se requieren proyecciones o representaciones indirectas.
+
+## Para qué se usa
+
+Sirve para:
+
+- detectar agrupamientos,
+- observar separación entre categorías,
+- identificar observaciones extremas,
+- entender la forma general de la nube de datos.
+
+## Qué se puede interpretar
+
+En este tipo de gráfico se analiza:
+
+- si los grupos están mezclados o separados,
+- si la nube es compacta o dispersa,
+- si hay puntos aislados,
+- si se observan direcciones dominantes.
+
+## Gráfico 2D
+
+```{r}
+library(ggplot2)
+
+ggplot(iris, aes(x = Sepal.Length, y = Sepal.Width, color = Species)) +
+  geom_point(size = 3, alpha = 0.8) +
+  labs(
+    title = "Visualización en el espacio (2D)",
+    subtitle = "Cada punto representa una observación",
+    x = "Largo del sépalo",
+    y = "Ancho del sépalo"
+  ) +
+  theme_minimal()
+```
+
+### Interpretación
+
+Aquí cada punto es una flor.  
+El eje horizontal representa el largo del sépalo y el eje vertical el ancho del sépalo.
+
+Este gráfico permite observar:
+
+- si las especies se separan visualmente,
+- si existe solapamiento entre categorías,
+- si algunas flores aparecen alejadas del patrón general,
+- y qué tan extendida es la nube de observaciones.
+
+### Limitación
+
+Solo muestra **dos variables a la vez**.  
+Si la estructura importante del conjunto depende de otras variables, el gráfico puede ocultarla.
+
+## Gráfico 3D
+
+```{r}
+library(plotly)
+
+plot_ly(
+  data = iris,
+  x = ~Sepal.Length,
+  y = ~Sepal.Width,
+  z = ~Petal.Length,
+  color = ~Species,
+  type = "scatter3d",
+  mode = "markers"
+) %>%
+  layout(
+    title = "Visualización en el espacio (3D)",
+    scene = list(
+      xaxis = list(title = "Sepal.Length"),
+      yaxis = list(title = "Sepal.Width"),
+      zaxis = list(title = "Petal.Length")
+    )
+  )
+```
+
+### Interpretación
+
+Al añadir una tercera variable, la estructura espacial se aprecia mejor.  
+Aquí se puede analizar:
+
+- si los grupos se diferencian más claramente,
+- si aparecen regiones de concentración,
+- si alguna especie ocupa zonas particulares del espacio,
+- y si ciertos puntos se comportan como posibles atípicos.
+
+### Idea importante
+
+Este gráfico refuerza que un dato multivariante puede pensarse como un punto en un espacio de varias dimensiones.
+
+# Transformación a formato largo
+
+```{r}
+library(tidyr)
+
+iris_largo <- iris |>
+  pivot_longer(
+    cols = 1:4,
+    names_to = "Variable",
+    values_to = "Valor"
+  )
+
+head(iris_largo)
+```
+
+## Por qué se hace esta transformación
+
+Muchos gráficos comparativos, como boxplots, histogramas y densidades por variable, se facilitan cuando los datos están en formato largo.  
+Así es posible usar una sola estructura para representar muchas variables en paneles o facetas.
+
+# Boxplot
+
+## Qué es
+
+El boxplot resume una distribución mediante:
+
+- cuartil 1,
+- mediana,
+- cuartil 3,
+- bigotes,
+- posibles valores atípicos.
+
+## Para qué se usa
+
+Sirve para:
+
+- comparar centros,
+- comparar dispersión,
+- identificar asimetrías aproximadas,
+- detectar outliers.
+
+## Qué se puede interpretar
+
+En un boxplot se revisa:
+
+- la posición de la mediana,
+- el tamaño de la caja,
+- la longitud de los bigotes,
+- la presencia de puntos fuera de los bigotes.
+
+## Boxplot por variable
+
+```{r}
+ggplot(iris_largo, aes(x = Variable, y = Valor, fill = Variable)) +
+  geom_boxplot(alpha = 0.7) +
+  labs(
+    title = "Boxplot por variable",
+    subtitle = "Centro, dispersión y posibles outliers",
+    x = "Variable",
+    y = "Valor"
+  ) +
+  theme_minimal()
+```
+
+### Interpretación
+
+- **Mediana**: línea central de la caja. Indica el centro de la distribución.
+- **Caja**: contiene el 50% central de los datos.
+- **Bigotes**: muestran la extensión de los valores no extremos.
+- **Puntos aislados**: sugieren observaciones atípicas.
+
+### Qué se puede concluir
+
+Con este gráfico es posible comparar qué variable:
+
+- tiene mayor dispersión,
+- tiene valores más concentrados,
+- presenta más asimetría,
+- o contiene observaciones más extremas.
+
+### Limitación
+
+El boxplot es excelente para resumir, pero no muestra la forma completa de la distribución.  
+Por eso conviene complementarlo con histogramas o densidades.
+
+## Boxplot por especie y variable
+
+```{r}
+ggplot(iris_largo, aes(x = Species, y = Valor, fill = Species)) +
+  geom_boxplot(alpha = 0.7) +
+  facet_wrap(~Variable, scales = "free") +
+  labs(
+    title = "Boxplot por especie y variable",
+    subtitle = "Comparación entre grupos",
+    x = "Especie",
+    y = "Valor"
+  ) +
+  theme_minimal()
+```
+
+### Interpretación
+
+Este gráfico permite analizar si una variable diferencia bien las categorías.
+
+Si las cajas de las especies quedan muy separadas, la variable podría ser útil para distinguir grupos.  
+Si las cajas se solapan mucho, la variable discrimina poco entre categorías.
+
+# Histograma
+
+## Qué es
+
+El histograma divide la recta numérica en intervalos y cuenta cuántas observaciones caen en cada uno.
+
+## Para qué se usa
+
+Sirve para estudiar:
+
+- forma de la distribución,
+- simetría o sesgo,
+- concentración,
+- amplitud de valores,
+- presencia de uno o varios picos.
+
+## Qué se puede interpretar
+
+Se analiza si la distribución es:
+
+- aproximadamente simétrica,
+- sesgada a la derecha,
+- sesgada a la izquierda,
+- unimodal,
+- multimodal,
+- concentrada o dispersa.
+
+## Histograma por variable
+
+```{r}
+ggplot(iris_largo, aes(x = Valor, fill = Variable)) +
+  geom_histogram(bins = 20, color = "black", alpha = 0.7) +
+  facet_wrap(~Variable, scales = "free") +
+  labs(
+    title = "Histogramas por variable",
+    subtitle = "Forma de distribución de cada variable",
+    x = "Valor",
+    y = "Frecuencia"
+  ) +
+  theme_minimal()
+```
+
+### Interpretación
+
+Con estos histogramas se puede observar:
+
+- en qué rangos se concentra la mayor parte de los datos,
+- si la variable tiene una forma aproximadamente simétrica,
+- si existen colas largas,
+- si se perciben varios grupos de valores.
+
+### Punto clave
+
+El histograma describe **una variable a la vez**.  
+Es muy útil para entender la distribución marginal, pero no muestra relaciones entre variables.
+
+# Densidad kernel
+
+## Qué es
+
+La densidad kernel es una estimación suavizada de la distribución.  
+Puede entenderse como una curva continua que resume cómo se distribuyen los datos.
+
+## Para qué se usa
+
+Sirve para:
+
+- ver la forma general sin depender tanto de los intervalos,
+- comparar distribuciones entre variables o grupos,
+- identificar picos,
+- estudiar superposiciones entre categorías.
+
+## Qué se puede interpretar
+
+Se observa:
+
+- posición de los picos,
+- anchura de la distribución,
+- asimetría,
+- superposición entre grupos,
+- posible multimodalidad.
+
+## Densidad por variable
+
+```{r}
+ggplot(iris_largo, aes(x = Valor, color = Variable, fill = Variable)) +
+  geom_density(alpha = 0.2) +
+  facet_wrap(~Variable, scales = "free") +
+  labs(
+    title = "Densidad kernel por variable",
+    subtitle = "Curva suavizada de la distribución",
+    x = "Valor",
+    y = "Densidad"
+  ) +
+  theme_minimal()
+```
+
+### Interpretación
+
+La densidad permite una lectura más suave que el histograma.
+
+Aquí se puede analizar:
+
+- dónde está la mayor concentración de datos,
+- si la forma es más o menos simétrica,
+- si hay varios picos,
+- y qué tan extendida es cada variable.
+
+### Aclaración
+
+El área bajo cada curva es 1.  
+La densidad no representa frecuencia absoluta, sino intensidad relativa de concentración.
+
+## Densidad por especie
+
+```{r}
+ggplot(iris_largo, aes(x = Valor, color = Species, fill = Species)) +
+  geom_density(alpha = 0.2) +
+  facet_wrap(~Variable, scales = "free") +
+  labs(
+    title = "Densidad kernel por especie",
+    subtitle = "Comparación entre grupos",
+    x = "Valor",
+    y = "Densidad"
+  ) +
+  theme_minimal()
+```
+
+### Interpretación
+
+Este gráfico es especialmente útil para comparar grupos.
+
+Se puede estudiar:
+
+- qué especie se concentra en valores más altos o más bajos,
+- cuánto se superponen las distribuciones,
+- qué variable separa mejor las categorías.
+
+Si dos curvas se superponen poco, esa variable tiene mayor capacidad de diferenciación entre grupos.
+
+# Scatterplot
+
+## Qué es
+
+El scatterplot representa dos variables cuantitativas usando puntos.  
+Cada observación ocupa una posición según sus dos valores.
+
+## Para qué se usa
+
+Sirve para:
+
+- estudiar dependencia entre variables,
+- identificar asociación positiva o negativa,
+- observar formas lineales o no lineales,
+- detectar agrupamientos,
+- localizar posibles outliers.
+
+## Qué se puede interpretar
+
+Se analiza:
+
+- dirección de la nube,
+- intensidad de la relación,
+- forma de la relación,
+- presencia de grupos,
+- presencia de puntos alejados.
+
+## Scatterplot simple
+
+```{r}
+ggplot(iris, aes(x = Petal.Length, y = Petal.Width, color = Species)) +
+  geom_point(size = 3, alpha = 0.8) +
+  labs(
+    title = "Scatterplot: Petal.Length vs Petal.Width",
+    subtitle = "Relación entre dos variables cuantitativas",
+    x = "Largo del pétalo",
+    y = "Ancho del pétalo"
+  ) +
+  theme_minimal()
+```
+
+### Interpretación
+
+- Si la nube asciende, hay asociación positiva.
+- Si la nube desciende, hay asociación negativa.
+- Si la nube no muestra patrón claro, hay poca relación lineal.
+- Si los puntos están muy alineados, la relación es fuerte.
+- Si están muy dispersos, la relación es débil.
+
+Además, si los colores forman grupos separados, la pareja de variables puede ayudar a distinguir categorías.
+
+## Scatterplot con tendencia lineal
+
+```{r}
+ggplot(iris, aes(x = Petal.Length, y = Petal.Width, color = Species)) +
+  geom_point(size = 3, alpha = 0.8) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    title = "Scatterplot con tendencia lineal",
+    subtitle = "Apoyo visual para la dirección de la relación",
+    x = "Largo del pétalo",
+    y = "Ancho del pétalo"
+  ) +
+  theme_minimal()
+```
+
+### Interpretación
+
+La línea ayuda a visualizar la dirección general de la relación.  
+No implica causalidad.  
+Solo apoya la lectura de una tendencia lineal aproximada.
+
+# Matriz de scatterplots
+
+## Qué es
+
+Es una colección de scatterplots para todas las parejas posibles de variables.
+
+## Para qué se usa
+
+Sirve para:
+
+- revisar todas las relaciones bivariadas a la vez,
+- comparar intensidad de asociación,
+- detectar qué variables están más relacionadas,
+- observar qué pares diferencian mejor los grupos.
+
+## Versión base
+
+```{r}
+pairs(
+  datos_num,
+  col = c("red", "green", "blue")[grupo],
+  pch = 19,
+  main = "Matriz de scatterplots"
+)
+```
+
+## Versión ampliada
+
+```{r}
+library(GGally)
+
+ggpairs(
+  iris,
+  columns = 1:4,
+  aes(color = Species, alpha = 0.7)
+)
+```
+
+### Interpretación
+
+La matriz ampliada combina:
+
+- distribuciones marginales en la diagonal,
+- relaciones entre pares fuera de la diagonal.
+
+Es una herramienta muy útil porque resume gran parte del análisis exploratorio multivariante en una sola figura.
+
+# Matriz de correlación visual
+
+## Qué es la correlación
+
+La correlación mide dependencia lineal entre dos variables.
+
+Toma valores entre -1 y 1:
+
+- cerca de 1: relación positiva fuerte,
+- cerca de -1: relación negativa fuerte,
+- cerca de 0: poca relación lineal.
+
+## Para qué se usa
+
+Sirve para:
+
+- resumir relaciones lineales,
+- identificar variables redundantes,
+- evaluar qué variables cambian juntas,
+- apoyar análisis posteriores como PCA o regresión.
+
+## Qué se puede interpretar
+
+Se observa:
+
+- signo de la relación,
+- magnitud de la relación,
+- patrones globales de dependencia.
+
+## Cálculo de la matriz de correlación
+
+```{r}
+mat_cor <- cor(datos_num)
+mat_cor
+```
+
+## Visualización con corrplot
+
+```{r}
+library(corrplot)
+
+corrplot(
+  mat_cor,
+  method = "color",
+  type = "upper",
+  addCoef.col = "black",
+  tl.col = "black",
+  tl.srt = 45,
+  number.cex = 0.8,
+  title = "Matriz de correlación visual",
+  mar = c(0, 0, 1, 0)
+)
+```
+
+### Interpretación
+
+Este gráfico resume visualmente la dependencia lineal.
+
+Permite identificar rápidamente:
+
+- relaciones positivas fuertes,
+- relaciones negativas fuertes,
+- relaciones débiles,
+- bloques de variables que se parecen mucho entre sí.
+
+## Heatmap de correlación
+
+```{r}
+cor_largo <- as.data.frame(as.table(mat_cor))
+colnames(cor_largo) <- c("Var1", "Var2", "Correlacion")
+
+ggplot(cor_largo, aes(x = Var1, y = Var2, fill = Correlacion)) +
+  geom_tile() +
+  geom_text(aes(label = round(Correlacion, 2))) +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
+  labs(
+    title = "Heatmap de correlación",
+    subtitle = "Resumen visual de dependencia lineal",
+    x = "",
+    y = ""
+  ) +
+  theme_minimal()
+```
+
+### Interpretación
+
+El heatmap ofrece una lectura clara del signo y la intensidad de las asociaciones.  
+Es útil para estudiantes porque transforma una tabla numérica en una estructura visual fácil de leer.
+
+# Coordenadas paralelas
+
+## Qué son
+
+Las coordenadas paralelas representan múltiples variables numéricas en un solo gráfico.
+
+- Cada eje vertical es una variable.
+- Cada línea es una observación.
+
+## Para qué se usan
+
+Sirven para:
+
+- comparar perfiles completos,
+- observar patrones multivariantes,
+- detectar grupos,
+- identificar observaciones con trayectorias inusuales.
+
+## Qué se puede interpretar
+
+Se revisa:
+
+- si las líneas de un mismo grupo tienen comportamientos parecidos,
+- si hay diferencias claras entre categorías,
+- si alguna observación tiene un perfil muy distinto.
+
+## Gráfico por especie
+
+```{r}
+library(lattice)
+
+parallelplot(
+  ~datos_num | Species,
+  data = iris,
+  horizontal.axis = FALSE,
+  col = c("red", "green", "blue"),
+  main = "Coordenadas paralelas por especie"
+)
+```
+
+## Gráfico general
+
+```{r}
+library(MASS)
+
+parcoord(
+  datos_num,
+  col = c("red", "green", "blue")[grupo],
+  var.label = TRUE,
+  main = "Coordenadas paralelas"
+)
+```
+
+### Interpretación
+
+Este tipo de gráfico ya no se concentra en una variable o en una pareja, sino en el **perfil multivariante completo**.
+
+Es muy útil cuando interesa comparar observaciones en varias dimensiones simultáneamente.
+
+### Limitación
+
+Si hay demasiadas observaciones, puede saturarse y volverse difícil de leer.
+
+# Medidas descriptivas multivariantes
+
+En análisis multivariante interesa resumir tres ideas principales:
+
+- localización,
+- dispersión,
+- dependencia.
+
+## Localización
+
+### Qué es
+
+La localización describe el centro del conjunto de datos.
+
+En una variable se usa la media.  
+En varias variables se usa la **media vectorial**.
+
+### Media vectorial
+
+```{r}
+media_vectorial <- colMeans(datos_num)
+media_vectorial
+```
+
+### Interpretación
+
+La media vectorial resume el promedio de cada variable y representa el centro del conjunto en el espacio multivariante.
+
+No significa que exista una observación real exactamente igual a ese vector.  
+Representa el punto central promedio de la nube de datos.
+
+### Media por grupo
+
+```{r}
+library(dplyr)
+
+media_por_grupo <- iris |>
+  group_by(Species) |>
+  summarise(across(where(is.numeric), mean))
+
+media_por_grupo
+```
+
+### Interpretación
+
+Comparar medias por grupo permite ver diferencias en el perfil promedio de cada especie.
+
+## Dispersión
+
+### Qué es
+
+La dispersión indica qué tan alejados están los datos respecto a su centro.
+
+En una variable pueden usarse:
+
+- varianza,
+- desviación estándar,
+- rango.
+
+En varias variables aparece además la **matriz de covarianza**.
+
+### Varianza
+
+```{r}
+varianzas <- apply(datos_num, 2, var)
+varianzas
+```
+
+#### Interpretación
+
+La varianza mide la variabilidad de cada variable.  
+Valores mayores indican mayor dispersión.  
+Depende de la escala de la variable.
+
+### Desviación estándar
+
+```{r}
+desv_std <- apply(datos_num, 2, sd)
+desv_std
+```
+
+#### Interpretación
+
+La desviación estándar es la raíz de la varianza.  
+Se interpreta en las mismas unidades originales de la variable.
+
+### Rango
+
+```{r}
+rangos <- apply(datos_num, 2, function(x) max(x) - min(x))
+rangos
+```
+
+#### Interpretación
+
+El rango mide la amplitud total entre el menor y el mayor valor.  
+Es muy fácil de entender, pero sensible a extremos.
+
+### Matriz de covarianza
+
+```{r}
+mat_cov <- cov(datos_num)
+mat_cov
+```
+
+#### Qué es la covarianza
+
+La covarianza mide cómo cambian juntas dos variables.
+
+- positiva: ambas aumentan juntas,
+- negativa: una aumenta mientras la otra disminuye,
+- cercana a cero: poca relación lineal conjunta.
+
+#### Interpretación de la matriz
+
+- En la diagonal aparecen las varianzas.
+- Fuera de la diagonal aparecen las covarianzas.
+
+Esta matriz resume:
+
+- dispersión individual,
+- cambio conjunto,
+- orientación de la nube de datos.
+
+### Determinante de la matriz de covarianza
+
+```{r}
+det(mat_cov)
+```
+
+#### Interpretación
+
+El determinante puede entenderse como una medida global de dispersión multivariante.  
+Si es muy pequeño, puede sugerir que algunas variables están muy relacionadas y que existe cierta redundancia.
+
+## Dependencia
+
+### Qué es
+
+La dependencia describe cómo se relacionan las variables entre sí.
+
+En este nivel introductorio se estudia con:
+
+- scatterplots,
+- covarianza,
+- correlación.
+
+### Matriz de correlación
+
+```{r}
+mat_cor
+```
+
+### Interpretación
+
+La correlación es una versión estandarizada de la covarianza.  
+Por eso sus valores siempre están entre -1 y 1 y es más fácil compararlos.
+
+### Correlación por especie
+
+```{r}
+for (esp in unique(iris$Species)) {
+  cat("Correlación para la especie:", esp, "\n")
+  sub <- iris |>
+    filter(Species == esp) |>
+    select(-Species)
+  print(cor(sub))
+  cat("\n")
+}
+```
+
+### Interpretación
+
+Calcular correlaciones por grupo permite evaluar si la relación entre variables cambia según la categoría.  
+Una relación global puede ocultar comportamientos particulares dentro de cada grupo.
+
+# Distancia de Mahalanobis
+
+## Qué es
+
+La distancia de Mahalanobis es una distancia multivariante que tiene en cuenta:
+
+- el centro del conjunto,
+- la dispersión,
+- la correlación entre variables.
+
+## Para qué se usa
+
+Sirve para detectar observaciones atípicas en sentido multivariante.
+
+## Idea importante
+
+Una observación puede no parecer extrema en una variable individual, pero sí ser extraña cuando se consideran todas las variables simultáneamente.
+
+## Cálculo
+
+```{r}
+dist_mahal <- mahalanobis(datos_num, center = media_vectorial, cov = mat_cov)
+iris$Dist_Mahalanobis <- dist_mahal
+
+head(iris)
+```
+
+## Visualización
+
+```{r}
+ggplot(iris, aes(x = 1:nrow(iris), y = Dist_Mahalanobis, color = Species)) +
+  geom_point(size = 2) +
+  geom_hline(
+    yintercept = qchisq(0.975, df = ncol(datos_num)),
+    linetype = "dashed"
+  ) +
+  labs(
+    title = "Distancia de Mahalanobis",
+    subtitle = "Detección de observaciones multivariadamente atípicas",
+    x = "Observación",
+    y = "Distancia"
+  ) +
+  theme_minimal()
+```
+
+### Interpretación
+
+Las observaciones con distancia alta respecto al centro multivariante pueden considerarse candidatas a atípicos multivariantes.
+
+# Resumen del bloque
+
+## Qué se trabajó
+
+En este bloque se abordaron:
+
+1. visualización en el espacio,
+2. boxplot,
+3. histograma,
+4. densidad kernel,
+5. scatterplot,
+6. matriz de correlación visual,
+7. coordenadas paralelas,
+8. medidas descriptivas multivariantes.
+
+## Qué aporta cada herramienta
+
+- **Visualización en el espacio**: permite entender la nube multivariante y la separación entre grupos.
+- **Boxplot**: resume centro, dispersión y posibles atípicos.
+- **Histograma**: muestra forma de distribución.
+- **Densidad kernel**: ofrece una versión suavizada de la distribución.
+- **Scatterplot**: estudia relación entre dos variables.
+- **Matriz de correlación**: resume dependencia lineal entre muchas variables.
+- **Coordenadas paralelas**: muestran perfiles completos de observaciones.
+- **Media vectorial**: resume el centro multivariante.
+- **Covarianza**: resume cambio conjunto.
+- **Correlación**: resume dependencia lineal estandarizada.
+- **Mahalanobis**: ayuda a detectar atípicos multivariantes.
+
+# Preguntas de cierre
+
+1. ¿Qué variable parece tener mayor dispersión?
+2. ¿Qué variable diferencia mejor las especies?
+3. ¿Qué diferencia se observa entre histograma y densidad kernel?
+4. ¿Qué relación existe entre `Petal.Length` y `Petal.Width`?
+5. ¿Qué aporta la matriz de correlación frente a revisar pares aislados?
+6. ¿Por qué las coordenadas paralelas sí son una herramienta multivariante?
+7. ¿Qué diferencia hay entre covarianza y correlación?
+8. ¿Por qué una observación puede ser atípica multivariantemente y no univariantemente?
+
+# Conclusión
+
+En datos multivariantes no basta con estudiar variables por separado.  
+Se necesita comprender:
+
+- cómo se distribuye cada variable,
+- cómo se relaciona con las demás,
+- cómo cambian los perfiles entre grupos,
+- y cómo se comporta el conjunto completo de observaciones.
+
+Las gráficas permiten observar patrones.  
+Las medidas descriptivas permiten cuantificarlos.  
+La combinación de ambas constituye la base del análisis exploratorio multivariante.

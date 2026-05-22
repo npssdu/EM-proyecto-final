@@ -1,0 +1,446 @@
+---
+title: "Estadística Multidimensional"
+author: "Jhon Alejandro Varón Robayo"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+output:
+  html_document:
+    toc: true
+    toc_depth: '2'
+    df_print: paged
+  html_notebook:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+subtitle: "Clase 1 - Syllabus e introducción: análisis univariado, bivariado y multivariado"
+---
+
+# 1. Presentación del curso
+
+Bienvenidos al curso **Estadística Multidimensional**.
+
+En este curso estudiaremos cómo analizar datos cuando cada observación está descrita por **varias variables al mismo tiempo**. Esta forma de pensar es clave en estadística moderna, ciencia de datos y machine learning.
+
+# 2. Información general del curso
+
+**Asignatura:** Estadística Multidimensional
+
+**Créditos:** 4
+
+**Distribución de horas:**
+
+- HTD: 4
+- HTC: 2
+- HTA: 6
+
+# 3. Saberes previos recomendados
+
+Se recomienda tener bases en:
+
+- Estadística y probabilidad
+- Programación
+- Álgebra lineal
+- Cálculo multivariado
+
+# 4. Objetivo del curso
+
+El objetivo del curso es aprender a:
+
+- analizar varias variables simultáneamente,
+- encontrar patrones en datos complejos,
+- interpretar relaciones entre variables,
+- aplicar técnicas estadísticas multivariadas usando **R**.
+
+# 5. Temas del semestre
+
+Trabajaremos principalmente:
+
+1. Introducción al lenguaje R
+2. Datos multivariados
+3. Variables aleatorias multivariadas
+4. Distribución normal multivariante
+5. Inferencia multivariante
+6. PCA
+7. Análisis factorial
+
+# 6. Evaluación del curso
+
+- **Talleres:** 40%
+- **Parciales:** 40%
+- **Proyecto final:** 20%
+
+# 7. Introducción conceptual
+
+En estadística podemos analizar los datos de varias formas:
+
+- **Univariado:** una variable
+- **Bivariado:** dos variables
+- **Multivariado:** varias variables al mismo tiempo
+
+Primero construiremos un dataset sencillo para ilustrar cada caso.
+
+```{r}
+estudiantes <- data.frame(
+  estudiante = c("Ana", "Luis", "Carlos", "Marta", "Sofia", "Pedro", "Laura", "Camilo"),
+  edad = c(19, 21, 20, 22, 19, 23, 21, 20),
+  promedio = c(4.5, 3.8, 4.0, 3.5, 4.7, 3.2, 4.1, 3.9),
+  horas_estudio = c(15, 8, 10, 6, 18, 5, 11, 9),
+  faltas = c(1, 5, 3, 6, 0, 8, 2, 4)
+)
+
+estudiantes
+```
+
+# 8. Lectura del dataset
+
+Cada fila representa un estudiante.
+
+Cada columna representa una variable.
+
+```{r}
+dim(estudiantes)
+names(estudiantes)
+str(estudiantes)
+summary(estudiantes)
+```
+
+# 9. Análisis univariado
+
+El análisis univariado estudia **una sola variable**.
+
+Ejemplo: estudiar únicamente la variable **promedio**.
+
+## 9.1 Resumen numérico de una variable
+
+```{r}
+summary(estudiantes$promedio)
+mean(estudiantes$promedio)
+sd(estudiantes$promedio)
+min(estudiantes$promedio)
+max(estudiantes$promedio)
+```
+
+## 9.2 Histograma
+
+```{r}
+hist(estudiantes$promedio,
+     main = "Análisis univariado: Promedio",
+     xlab = "Promedio",
+     ylab = "Frecuencia")
+```
+
+## 9.3 Boxplot
+
+```{r}
+boxplot(estudiantes$promedio,
+        main = "Boxplot del promedio",
+        ylab = "Promedio")
+```
+
+## 9.4 Interpretación
+
+En este caso estamos mirando solo una variable:
+
+- cómo se distribuye,
+- cuál es su promedio,
+- qué tanta dispersión tiene,
+- si hay valores altos o bajos.
+
+# 10. Segundo ejemplo univariado
+
+Ahora estudiemos solo la variable **horas_estudio**.
+
+```{r}
+summary(estudiantes$horas_estudio)
+mean(estudiantes$horas_estudio)
+sd(estudiantes$horas_estudio)
+```
+
+```{r}
+hist(estudiantes$horas_estudio,
+     main = "Análisis univariado: Horas de estudio",
+     xlab = "Horas de estudio",
+     ylab = "Frecuencia")
+```
+
+```{r}
+boxplot(estudiantes$horas_estudio,
+        main = "Boxplot de horas de estudio",
+        ylab = "Horas")
+```
+
+# 11. Análisis bivariado
+
+El análisis bivariado estudia la relación entre **dos variables**.
+
+Ejemplo: **horas_estudio** y **promedio**.
+
+## 11.1 Gráfico de dispersión
+
+```{r}
+plot(estudiantes$horas_estudio, estudiantes$promedio,
+     main = "Análisis bivariado: Horas de estudio vs Promedio",
+     xlab = "Horas de estudio",
+     ylab = "Promedio",
+     pch = 19)
+```
+
+## 11.2 Correlación
+
+```{r}
+cor(estudiantes$horas_estudio, estudiantes$promedio)
+```
+
+## 11.3 Interpretación
+
+Aquí ya no estudiamos una variable sola, sino la relación entre dos.
+
+Pregunta clave:
+
+> ¿A mayor número de horas de estudio, parece aumentar el promedio?
+
+# 12. Segundo ejemplo bivariado
+
+Ahora estudiemos **faltas** y **promedio**.
+
+```{r}
+plot(estudiantes$faltas, estudiantes$promedio,
+     main = "Análisis bivariado: Faltas vs Promedio",
+     xlab = "Faltas",
+     ylab = "Promedio",
+     pch = 19)
+```
+
+```{r}
+cor(estudiantes$faltas, estudiantes$promedio)
+```
+
+## Interpretación
+
+Pregunta clave:
+
+> ¿Más faltas parecen asociarse con menor promedio?
+
+# 13. Tercer ejemplo bivariado
+
+Ahora estudiemos **edad** y **promedio**.
+
+```{r}
+plot(estudiantes$edad, estudiantes$promedio,
+     main = "Análisis bivariado: Edad vs Promedio",
+     xlab = "Edad",
+     ylab = "Promedio",
+     pch = 19)
+```
+
+```{r}
+cor(estudiantes$edad, estudiantes$promedio)
+```
+
+# 14. Análisis multivariado
+
+El análisis multivariado estudia **varias variables simultáneamente**.
+
+Tomaremos las variables:
+
+- edad
+- promedio
+- horas_estudio
+- faltas
+
+## 14.1 Selección de variables numéricas
+
+```{r}
+datos_num <- estudiantes[, c("edad", "promedio", "horas_estudio", "faltas")]
+datos_num
+```
+
+## 14.2 Resumen conjunto
+
+```{r}
+summary(datos_num)
+```
+
+## 14.3 Matriz de correlación
+
+```{r}
+cor(datos_num)
+```
+
+## 14.4 Matriz de dispersión
+
+```{r}
+pairs(datos_num,
+      main = "Análisis multivariado: matriz de dispersión")
+```
+
+## 14.5 Interpretación
+
+Aquí observamos al mismo tiempo:
+
+- distribuciones de cada variable,
+- relaciones entre pares de variables,
+- patrones generales del dataset.
+
+Este es el paso inicial hacia técnicas más avanzadas como PCA y análisis factorial.
+
+# 15. Comparación entre enfoques
+
+## Univariado
+Se analiza una sola variable.
+
+Ejemplo:
+- promedio
+
+## Bivariado
+Se analiza la relación entre dos variables.
+
+Ejemplo:
+- horas de estudio y promedio
+
+## Multivariado
+Se analizan varias variables simultáneamente.
+
+Ejemplo:
+- edad, promedio, horas de estudio y faltas
+
+# 16. Ejemplo clásico: dataset iris
+
+Ahora veamos un dataset real clásico en análisis multivariado.
+
+```{r}
+data(iris)
+head(iris)
+```
+
+```{r}
+str(iris)
+summary(iris)
+```
+
+# 17. Ejemplo univariado con iris
+
+Estudiemos solo **Sepal.Length**.
+
+```{r}
+summary(iris$Sepal.Length)
+mean(iris$Sepal.Length)
+sd(iris$Sepal.Length)
+```
+
+```{r}
+hist(iris$Sepal.Length,
+     main = "Univariado en iris: Sepal.Length",
+     xlab = "Sepal.Length",
+     ylab = "Frecuencia")
+```
+
+# 18. Ejemplo bivariado con iris
+
+Relación entre **Petal.Length** y **Petal.Width**.
+
+```{r}
+plot(iris$Petal.Length, iris$Petal.Width,
+     main = "Bivariado en iris: Petal.Length vs Petal.Width",
+     xlab = "Petal.Length",
+     ylab = "Petal.Width",
+     pch = 19)
+```
+
+```{r}
+cor(iris$Petal.Length, iris$Petal.Width)
+```
+
+# 19. Ejemplo multivariado con iris
+
+Seleccionamos las variables numéricas.
+
+```{r}
+iris_num <- iris[, 1:4]
+iris_num
+```
+
+```{r}
+cor(iris_num)
+```
+
+```{r}
+pairs(iris_num,
+      main = "Multivariado en iris")
+```
+
+# 20. Actividad en clase
+
+Con base en el dataset `estudiantes`, responder:
+
+1. ¿Qué observan en la distribución del promedio?
+2. ¿Qué relación parece haber entre horas de estudio y promedio?
+3. ¿Qué relación parece haber entre faltas y promedio?
+4. ¿Qué ventaja tiene mirar todas las variables al tiempo?
+
+# 21. Actividad diagnóstica guiada
+
+Usando el dataset `iris`, realizar:
+
+1. Un ejemplo univariado
+2. Un ejemplo bivariado
+3. Un ejemplo multivariado
+4. Escribir una conclusión de cada uno
+
+# 22. Solución guiada
+
+## Univariado
+
+```{r}
+summary(iris$Sepal.Width)
+hist(iris$Sepal.Width,
+     main = "Univariado: Sepal.Width",
+     xlab = "Sepal.Width")
+```
+
+## Bivariado
+
+```{r}
+plot(iris$Sepal.Length, iris$Sepal.Width,
+     main = "Bivariado: Sepal.Length vs Sepal.Width",
+     xlab = "Sepal.Length",
+     ylab = "Sepal.Width",
+     pch = 19)
+cor(iris$Sepal.Length, iris$Sepal.Width)
+```
+
+## Multivariado
+
+```{r}
+summary(iris_num)
+cor(iris_num)
+pairs(iris_num)
+```
+
+# 23. Ideas clave de la sesión
+
+Al finalizar esta clase, el estudiante debe comprender que:
+
+- el análisis **univariado** estudia una sola variable,
+- el análisis **bivariado** estudia dos variables y su relación,
+- el análisis **multivariado** estudia varias variables simultáneamente,
+- R permite ilustrar y comparar fácilmente estos tres enfoques.
+
+# 24. Tarea sugerida
+
+Buscar un dataset con al menos 4 variables numéricas y realizar:
+
+1. un ejemplo univariado,
+2. un ejemplo bivariado,
+3. un ejemplo multivariado,
+4. escribir dos conclusiones por cada caso.
+
+# 25. Próxima clase
+
+En la siguiente sesión trabajaremos con:
+
+- objetos en R,
+- vectores,
+- matrices,
+- data frames,
+- importación de datos,
+- y exploración más formal de datasets.
