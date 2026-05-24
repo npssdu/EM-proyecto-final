@@ -10,6 +10,8 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+# Tras cada Knit, si el linter de VS Code marca la línea 34 del HTML, ejecuta:
+# source("fix_bootstrap_css.R")
 ```
 
 # Propósito del Trabajo
