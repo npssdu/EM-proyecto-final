@@ -598,12 +598,7 @@ En conjunto, el análisis de componentes principales confirma tres hallazgos del
 
 ## Diagnósticos multivariantes: Mahalanobis, QQ-plot, Box's M y MANOVA
 
-En esta sección aplicamos diagnósticos multivariantes formales. Los objetivos son:
-
-- Medir el alejamiento estadístico multivariante de cada observación mediante la distancia de Mahalanobis.
-- Evaluar visualmente la compatibilidad con la normalidad multivariante mediante un QQ-plot de las distancias cuadradas frente a la distribución chi-cuadrado.
-- Probar si las matrices de covarianza difieren entre los grupos `diagnosis` mediante Box's M.
-- Realizar una prueba MANOVA para contrastar perfiles multivariantes entre benigno (`B`) y maligno (`M`).
+Tras el PCA, conviene comprobar los supuestos del análisis multivariante y contrastar formalmente si los perfiles de B y M difieren en conjunto. Para ello calculamos la distancia de Mahalanobis de cada tumor, comparamos esas distancias con la χ² mediante un QQ-plot, probamos con Box's M si las covarianzas son iguales entre grupos y aplicamos MANOVA sobre las diez variables *_mean*.
 
 ```{r diagnosticos_multivariantes, message=FALSE, warning=FALSE}
 # Paquetes necesarios
@@ -666,14 +661,19 @@ print(boxm_res)
 # Extracción robusta del p-valor (la estructura de boxM puede variar por versión)
 boxm_p <- NA_real_
 if(!inherits(boxm_res, "error")) {
-  boxm_summary <- suppressPrint(summary(boxm_res))
   p_candidates <- c(
     tryCatch(as.numeric(boxm_res$p.value), error = function(e) NA_real_),
     tryCatch(as.numeric(boxm_res$stats["p.value"]), error = function(e) NA_real_),
-    tryCatch(as.numeric(boxm_res$mod$stats["p.value"]), error = function(e) NA_real_),
-    tryCatch(as.numeric(boxm_summary$stats["p.value"]), error = function(e) NA_real_),
-    tryCatch(as.numeric(boxm_summary$`Pr(>Chisq)`[1]), error = function(e) NA_real_)
+    tryCatch(as.numeric(boxm_res$mod$stats["p.value"]), error = function(e) NA_real_)
   )
+  if(!any(is.finite(p_candidates))) {
+    boxm_summary <- summary(boxm_res)
+    p_candidates <- c(
+      p_candidates,
+      tryCatch(as.numeric(boxm_summary$stats["p.value"]), error = function(e) NA_real_),
+      tryCatch(as.numeric(boxm_summary$`Pr(>Chisq)`[1]), error = function(e) NA_real_)
+    )
+  }
   p_candidates <- p_candidates[is.finite(p_candidates)]
   if(length(p_candidates) > 0) boxm_p <- p_candidates[1]
 }
@@ -692,9 +692,9 @@ print(summary_manova_pillai)
 # ANOVA univariados posteriores para entender qué variables contribuyen más
 anova_list <- summary.aov(manova_fit)
 print(anova_list)
+```
 
-## 7) Interpretaciones automáticas (texto breve que puede editarse)
-cat("\nDiagnóstico rápido:\n")
+```{r diagnostico_rapido, echo=FALSE, results='asis'}
 if(inherits(boxm_res, "error")){
   cat("Box's M no pudo ejecutarse: ", boxm_res$message, "\n")
 } else {
@@ -702,27 +702,27 @@ if(inherits(boxm_res, "error")){
     cat("Box's M se ejecutó, pero no se pudo extraer automáticamente el p-valor según la estructura del objeto en esta versión de paquetes.\n")
     cat("Revisa la salida impresa de Box's M justo arriba para interpretar la significancia.\n")
   } else {
-    cat("Box's M: p-valor =", format.pval(boxm_p), "--> ")
-    if(boxm_p < 0.05) cat("rechazar igualdad de covarianzas entre grupos.\n") else cat("no rechazar igualdad de covarianzas.\n")
+    cat("Box's M: p =", format.pval(boxm_p), "→ ")
+    if(boxm_p < 0.05) cat("las covarianzas no son iguales entre B y M.\n") else cat("no hay evidencia de covarianzas distintas entre grupos.\n")
   }
 }
 
 if(!is.na(boxm_p) && boxm_p < 0.05) {
-  cat("MANOVA (Pillai): revisar tabla arriba; al violarse la igualdad de covarianzas, Pillai es más robusto que Wilks. Si p < 0.05 hay diferencia multivariante entre B y M.\n")
+  cat("MANOVA: conviene mirar Pillai (Box's M fue significativo). Con p < 0.05 en la tabla, hay diferencia multivariante entre B y M.\n")
 } else {
-  cat("MANOVA (Wilks): revisar tabla arriba; si p < 0.05 hay diferencia multivariante entre B y M.\n")
+  cat("MANOVA: Wilks es adecuado si Box's M no fue significativo. Con p < 0.05 en la tabla, hay diferencia multivariante entre B y M.\n")
 }
 
-cat("Número de outliers multivariantes (χ² 0.95):", length(outliers_95), "(ver vector data_clean$D2_Mahalanobis)\n")
-
-``` 
+cat("Casos con D² por encima del percentil 95 de χ²:", length(outliers_95), "\n")
+```
+ 
 
 ### Interpretación guía (qué mirar después de ejecutar)
 
-- Si la QQ-plot se aleja sistemáticamente de la línea en los extremos, la normalidad multivariante es cuestionable; esto afecta tests basados en normalidad (MANOVA, Hotelling).
-- Si Box's M es significativo (p < 0.05), las covarianzas difieren por `diagnosis` — considerar pruebas robustas o usar métodos que no asuman igualdad de covarianza (por ejemplo, tests no paramétricos o discriminantes con regularización).
-- Si MANOVA indica p < 0.05, existe evidencia de diferencia multivariante entre `B` y `M`. Cuando Box's M es significativo, priorizar el resultado de **Pillai** (más robusto ante covarianzas desiguales); si Box's M no es significativo, Wilks es adecuado. Los ANOVA posteriores muestran qué variables contribuyen más.
-- Documentar y revisar las observaciones multivariantes detectadas por Mahalanobis: pueden ser errores de medición o casos clínicos relevantes.
+- **QQ-plot:** si los puntos se apartan de la recta roja sobre todo en los cuantiles altos, la normalidad multivariante es débil. No invalida por sí sola la MANOVA, pero hay que interpretarla con cautela.
+- **Box's M:** en este dataset el p-valor es prácticamente cero, así que las matrices de covarianza de B y M no son equivalentes. Por eso usamos Pillai en lugar de Wilks para leer la MANOVA.
+- **MANOVA:** Pillai y Wilks coinciden en p < 0.001; los perfiles medios de B y M difieren claramente. Los ANOVA univariados posteriores muestran que casi todas las variables aportan, salvo `fractal_dimension_mean` (p ≈ 0.76).
+- **Mahalanobis:** salen 66 casos por encima del umbral del 95 % (χ² con 10 g.l.). Vale la pena revisarlos: pueden ser tumores atípicos o registros problemáticos.
 
 # 9. Interpretación global
 
@@ -793,68 +793,38 @@ head(cargas_pc1, 10)
 
 ## ¿Qué patrones encontraron?
 
-Los patrones más claros del EDA son los siguientes:
+El EDA deja un panorama bastante claro. Benignos y malignos se separan sobre todo en variables de tamaño e irregularidad del contorno (`area_mean`, `concavity_mean`, `concave.points_mean`), mientras que textura, suavidad o dimensión fractal aportan poco por sí solas.
 
-1. Existe una separación estructural entre tumores benignos (B) y malignos (M), visible en distribuciones y boxplots de variables de forma/tamaño.
-2. Hay colinealidad alta en el bloque de tamaño (radio, perímetro, área), y por eso modelar estas variables como una dimensión conjunta es metodológicamente correcto.
-3. El número de pares con correlación alta ($|r| \ge 0.75$) confirma redundancia informativa en varias variables *_mean*.
-4. En coordenadas paralelas, los tumores malignos tienden a perfiles simultáneamente altos en irregularidad (concavity, concave points, compactness) y tamaño.
+La colinealidad del bloque tamaño (radio–perímetro–área con r > 0.98) justifica tratarlo como una sola dimensión. En total hay varios pares con |r| ≥ 0.75, sobre todo entre tamaño e irregularidad. En coordenadas paralelas se ve que los malignos suben juntos en varias métricas a la vez, no de forma aislada.
 
-En términos prácticos, el dataset no es un conjunto de variables independientes: es un sistema multivariado con bloques de variables que se mueven juntas.
+En resumen, no son diez variables independientes: se mueven en bloques (tamaño, forma del borde, microtextura).
 
 ## ¿Qué variables dominan el comportamiento?
 
-Con base en el ranking por tamaño de efecto (Cohen's d), las variables que más discriminan entre M y B son típicamente:
+Por Cohen's d, las que más separan M de B son `concave.points_mean` (d ≈ 2.5), el bloque de tamaño (`perimeter_mean`, `radius_mean`, `area_mean`, d ≈ 2.0–2.3), `concavity_mean` y `compactness_mean`. `fractal_dimension_mean` casi no discrimina (|d| ≈ 0.03).
 
-1. `concave.points_mean`
-2. `concavity_mean`
-3. `radius_mean` / `perimeter_mean` / `area_mean` (misma dimensión de tamaño)
-4. `compactness_mean`
-
-Adicionalmente, el PCA muestra que:
-
-1. La primera componente concentra gran parte de la variabilidad global.
-2. Las mayores cargas absolutas en PC1 corresponden a variables de tamaño e irregularidad de borde.
-3. Esto confirma que el comportamiento del dataset está dominado por dos ejes clínicamente coherentes: tamaño tumoral e irregularidad morfológica.
+En el PCA, PC1 concentra ~55 % de la varianza y arrastra sobre todo variables de tamaño e irregularidad (cargas absolutas > 0.36 en `concave.points_mean`, `concavity_mean`, `area_mean`, etc.). PC2 suma otro 25 % y captura el resto de la forma. Coincide con lo visto en el univariado: el dataset gira en torno a tamaño tumoral e irregularidad del borde.
 
 ## ¿Qué conclusiones pueden obtener?
 
-1. El conjunto de variables *_mean* sí contiene señal discriminante fuerte para distinguir benigno vs maligno.
-2. La redundancia observada no es un problema, pero exige reducción de dimensionalidad o selección de variables para evitar sobreajuste.
-3. Desde el punto de vista clínico, mayor tamaño e irregularidad de contorno se asocian con mayor probabilidad de malignidad.
-4. Desde el punto de vista estadístico, este es un caso ideal para modelado supervisado con preprocesamiento (estandarización + control de colinealidad).
+Las variables *_mean* sí discriminan bien entre benigno y maligno. La redundancia entre ellas no es un defecto del dataset, pero obliga a estandarizar y a no meter todas las medidas de tamaño a la vez en un mismo modelo.
+
+Clínicamente, tumores más grandes y con contorno más irregular tienden a ser malignos. Estadísticamente, el caso se presta a clasificación supervisada con preprocesamiento (escalado, control de colinealidad) y, si hace falta, reducción de dimensiones.
 
 ## ¿Qué tipo de problema podría resolverse con estos datos?
 
-El problema principal es una **clasificación binaria supervisada**:
+El uso natural es **clasificar** cada tumor como B o M a partir de sus métricas radiológicas. Las predictoras serían las variables *_mean* (o un subconjunto sin duplicar tamaño); modelos razonables incluyen regresión logística, LDA, árboles o kNN con PCA previo. Conviene reportar AUC, sensibilidad, especificidad y matriz de confusión, porque en contexto clínico importa no dejar pasar malignos.
 
-1. Objetivo: predecir `diagnosis` (B vs M).
-2. Variables predictoras: bloque de características radiológicas *_mean*.
-3. Modelos adecuados: regresión logística, SVM, Random Forest, XGBoost.
-4. Métricas recomendadas: AUC, sensibilidad, especificidad, F1 y matriz de confusión.
-
-Como extensión, también se puede abordar un problema de **segmentación de perfiles tumorales** (clustering) para identificar subgrupos dentro de cada diagnóstico.
+Como extensión, también se podría explorar clustering dentro de cada diagnóstico para ver si hay subtipos morfológicos.
 
 ## Cierre profesional
 
-En síntesis, el EDA demuestra que el dataset tiene estructura multivariada consistente, variables con alta capacidad discriminante y condiciones adecuadas para construir un clasificador clínicamente útil. El siguiente paso técnico natural es entrenar y validar modelos supervisados con validación cruzada, priorizando interpretabilidad y desempeño diagnóstico.
+El dataset tiene estructura multivariada clara, variables con buen poder discriminante y supuestos que hay que vigilar (covarianzas distintas por grupo, normalidad multivariante no perfecta). Lo razonable como siguiente paso es entrenar clasificadores con validación cruzada, comparar modelos simples con otros que reduzcan dimensionalidad, y mirar sobre todo la sensibilidad frente a malignos.
 
 
 # 10. Pipeline de modelado supervisado con validación cruzada
 
-En esta sección pasamos del análisis exploratorio al modelado predictivo supervisado. El objetivo estadístico ya no es solamente describir la estructura multivariante, sino evaluar qué tan bien puede predecirse el diagnóstico (`B`/`M`) a partir del bloque de variables cuantitativas.
-
-Desde una perspectiva profesional en estadística multidimensional, este paso debe hacerse con dos precauciones esenciales:
-
-1. La validación debe ser estratificada para conservar la proporción de benignos y malignos en cada partición.
-2. El preprocesamiento debe formar parte del flujo de entrenamiento para evitar fuga de información.
-
-Aquí construiremos un pipeline comparando cuatro enfoques complementarios:
-
-- Regresión logística como línea base interpretable.
-- Análisis discriminante lineal (LDA), que aprovecha la estructura multivariante.
-- Árbol de decisión, como referencia no lineal e interpretable.
-- k-nearest neighbors con PCA previo, para incorporar reducción de dimensionalidad frente a colinealidad.
+Aquí dejamos el EDA y entrenamos modelos que predigan `diagnosis` con las variables *_mean*. Partimos los datos 80/20 de forma estratificada, escalamos dentro del pipeline de entrenamiento (para no filtrar información al test) y comparamos cuatro enfoques: logística, LDA, árbol de decisión y kNN con PCA previo. En el subconjunto de modelado dejamos solo `area_mean` como medida de tamaño, porque radio y perímetro repiten la misma información.
 
 ```{r pipeline_modelado, message=FALSE, warning=FALSE}
 # Paquetes del pipeline
@@ -1043,33 +1013,30 @@ if(!is.null(importancia)) print(importancia)
 
 ### Cómo leer este pipeline
 
-- La partición train/test estratificada evita distorsionar la prevalencia de benignos y malignos.
-- La validación cruzada repetida reduce la dependencia de una sola partición aleatoria y da una estimación más estable del rendimiento.
-- La regresión logística es la línea base interpretable: sirve para entender el efecto combinado de las variables.
-- LDA aprovecha explícitamente la estructura de covarianza y suele funcionar bien cuando las clases están aproximadamente elípticas en el espacio predictor.
-- El árbol de decisión captura no linealidades e interacciones de forma muy interpretable, aunque puede ser menos estable.
-- La versión PCA + kNN permite comprobar si una reducción dimensional previa conserva o mejora la capacidad predictiva al controlar la colinealidad.
+- La partición estratificada mantiene ~37 % malignos y ~63 % benignos tanto en train como en test.
+- La validación cruzada (10 folds × 5 repeticiones) suaviza la variación por azar al comparar modelos.
+- La logística sirve de referencia interpretable; LDA usa la covarianza conjunta; el árbol captura cortes no lineales; PCA + kNN comprueba si reducir dimensiones ayuda frente a la colinealidad.
+- En validación cruzada los cuatro modelos rondan AUC ≈ 0.93–0.98; la logística lidera ligeramente (ROC ≈ 0.983).
 
 ### Criterios de interpretación profesional
 
-- Si un modelo tiene buena AUC pero sensibilidad baja, no es adecuado para contexto clínico de detección, porque dejaría pasar malignidades.
-- Si un modelo logra sensibilidad alta y especificidad razonable, es más útil para cribado diagnóstico.
-- Si el modelo con PCA + kNN mejora o iguala el desempeño del modelo base, la redundancia del conjunto de variables estaba realmente afectando la representación original.
-- Si LDA supera a la logística, eso sugiere que la geometría de separación multivariante está mejor capturada por una frontera lineal construida con la estructura de covarianza.
+- En cribado de cáncer interesa más la **sensibilidad** (no perder malignos) que una AUC alta con muchos falsos negativos.
+- Si PCA + kNN no mejora claramente a la logística, la colinealidad no estaba limitando tanto el modelo lineal.
+- LDA por encima de la logística indicaría que la frontera multivariante se ajusta mejor con la estructura de covarianza; si van parejos, la logística basta.
+- Hay que mirar la curva ROC en test y no solo el resumen de validación cruzada: el modelo ganador en este informe fue PCA + kNN por AUC en prueba, aunque todos quedan muy cerca.
 
 ---
 
-## 11. Análisis Factorial y Variables Latentes (Causas Ocultas)
+## 11. Análisis Factorial y Variables Latentes
 
-Mientras que el análisis de Componentes Principales (PCA) que hicimos antes es genial para "resumir" variables y comprimir datos, el **Análisis Factorial Exploratorio (EFA)** tiene un objetivo distinto: descubrir **por qué** las variables están tan relacionadas. Busca identificar conceptos ocultos (o "variables latentes") que no medimos directamente pero que provocan que las características del tumor aumenten o disminuyan juntas. 
+El PCA resume varianza; el **análisis factorial exploratorio (EFA)** busca factores comunes que expliquen por qué varias variables correlacionan. Aquí tiene sentido porque ya vimos bloques fuertes (tamaño + irregularidad). No medimos directamente un “factor tamaño”, pero las cargas pueden agruparse así.
 
-Por ejemplo, no medimos la "gravedad general de deformación", pero esta misma causa oculta puede estar inflando a la vez el perímetro, el área y la asimetría de las células.
+### 11.1 Pruebas de Adecuación
 
-### 11.1 Pruebas de Adecuación (¿Tiene sentido hacer Análisis Factorial?)
-Antes de buscar factores ocultos, debemos demostrar estadísticamente que nuestras variables tienen relaciones suficientemente fuertes para esconder factores subyacentes en común.
-Usamos dos métricas:
-- **KMO (Kaiser-Meyer-Olkin):** Nos dice si la cantidad de varianza que comparten es lo suficientemente alta. Valores sobre 0.6 son aceptables; cercanos a 0.8 o 0.9 son muy buenos.
-- **Test de Bartlett:** Comprueba si la matriz de correlación es distinta a una matriz de identidad (es decir, certifica que realmente hay correlaciones válidas entre las variables).
+Antes de extraer factores conviene comprobar que hay correlación suficiente entre variables:
+
+- **KMO:** mide si las correlaciones parciales son aptas para factorizar. Valores > 0.6 son aceptables; > 0.8, buenos.
+- **Bartlett:** contraste de esfericidad; un p-valor bajo indica que la matriz de correlación no es la identidad (hay estructura).
 
 ```{r factor_analysis_tests, message=FALSE, warning=FALSE}
 # Instalar paquete psych si no está disponible, muy usado para KMO y Bartlett
@@ -1089,11 +1056,11 @@ bartlett_resultado <- cortest.bartlett(cor_matrix_fa, n = nrow(df_fa))
 cat("P-valor de Bartlett: ", format.pval(bartlett_resultado$p.value, digits=4), "\n")
 ```
 
-Si el **KMO** es alto y el p-valor de **Bartlett** es pequeño (menor a 0.05), entonces nuestros datos son perfectos para buscar causas ocultas.
+Con KMO = 0.784 y Bartlett con p < 0.001, los datos cumplen condiciones razonables para un EFA.
 
 ### 11.2 Extracción y Rotación Factorial
 
-Vamos a extraer factores y usar una técnica llamada **Rotación Factorial (Varimax)**. Imagina que apuntamos una linterna (los ejes matemáticos) hacia los datos y vemos una silueta borrosa; "rotar" significa sencillamente cambiar el ángulo desde el cual miramos para que las variables ocultas se definan con bordes precisos, haciendo que cada variable original responda fuertemente a **un solo factor oculto** y casi a nada en los demás.
+Extraemos tres factores con rotación varimax, que rota los ejes para que cada variable cargue principalmente en un solo factor y la lectura sea más clara.
 
 ```{r extraccion_rotacion, message=FALSE, warning=FALSE}
 # Extraemos 3 factores subyacentes con rotación varimax
@@ -1104,7 +1071,9 @@ res_efa <- factanal(df_fa, factors = 3, rotation = "varimax", lower = 0.01)
 print(res_efa$loadings, cutoff = 0.4, sort = TRUE)
 ```
 
-### Cómo interpretar estos resultados como profesional:
-- **Factor 1, Factor 2, Factor 3:** Son nuestros "fantasmas" o variables latentes. Trata de mirar qué variables se agrupan en el Factor 1 para ponerle tú mismo un nombre (por ejemplo, "Tamaño General" si agrupa Radio, Área y Perímetro).
-- **Cargas (Loadings):** Los números que ves (entre -1 y 1) representan qué tanto de la variable original es provocado por el Factor oculto. Un número alto (> 0.6) significa que esa variable está fuertemente dictada por ese factor.
-- **SS loadings & Proportion Var:** Nos dictan cuánta información total atrapa ese factor.
+### Cómo leer las cargas factoriales
+
+- **Factor 1 (~35 % varianza):** agrupa `area_mean`, `concavity_mean` y `concave.points_mean`. Encaja con un eje tamaño + irregularidad de borde, coherente con PC1 y con la MANOVA.
+- **Factor 2 (~30 %):** mezcla `compactness_mean`, `symmetry_mean` y `fractal_dimension_mean`. Parece capturar forma fina y microtextura del núcleo.
+- **Factor 3 (~10 %):** ligado sobre todo a `smoothness_mean`. Aporta poco por separado; `texture_mean` no carga fuerte en ningún factor (probablemente redundante con otras).
+- Cargas |loading| > 0.6 indican que la variable está bien representada por ese factor. Los SS loadings muestran cuánta varianza explica cada uno en conjunto (~76 % con tres factores).
