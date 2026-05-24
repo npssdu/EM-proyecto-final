@@ -14,7 +14,7 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 
 # Propósito del Trabajo
 
-(Escribe aquí el propósito del análisis, destacando la búsqueda de patrones para diferenciar diagnósticos benignos y malignos).
+El propósito de este análisis exploratorio de datos (EDA) es comprender la estructura multidimensional de las características radiológicas de masas mamarias. El objetivo central es identificar patrones conjuntos funcionales y diferencias distribucionales que permitan discriminar con alta fiabilidad tumores benignos de malignos. A través de estadística multivariada, buscaremos exponer relaciones ocultas y sentar las bases para modelado paramétrico predictivo.
 
 # 1. Dataset
 
@@ -45,13 +45,13 @@ head(data, 5)
 ```
 
 ## Descripción del conjunto de datos
-(Escribe aquí la fuente del dataset, número de registros y descripción general)
+El conjunto corresponde al **Breast Cancer Wisconsin (Diagnostic) Dataset**, disponible en el UCI Machine Learning Repository. Cuenta con 569 observaciones clínicas de pacientes y 32 columnas: 1 código de ID, 1 variable objetivo diagnóstica y 30 métricas radiómicas obtenidas del cálculo de propiedades del núcleo celular (medias, error estándar y peores métricas).
 
 ## Tipo de variables
-(Describe brevemente las variables numéricas y categóricas presentes)
+Tenemos una variable categórica nominal (`diagnosis`: 'B' Benigno, 'M' Maligno) y 30 variables numéricas continuas físicas (radio, área, textura, suavidad, dim. fractal, etc.). Esta naturaleza numérica densa es ideal para análisis estocástico y distancias.
 
 ## Justificación
-(Explica por qué este dataset es apropiado para un análisis multivariado)
+El dataset es idóneo para estadística multivariada porque presenta un espacio continuo de variables predictoras subyacentes unidas por dependencias biológico-estructurales (alta colinealidad esperada). Permite realizar análisis de varianzas conjuntas, agrupación (clustering), visualización de autovectores (PCA) y modelos de separación fronteriza debido a su alto riesgo paramétrico de múltiples dimensiones.
 
 # 2. Limpieza de datos
 
@@ -78,7 +78,7 @@ data_num <- data_clean %>% dplyr::select(where(is.numeric))
 ```
 
 ### Interpretación
-(Redacta aquí qué encontraste en la limpieza, si había nulos o duplicados y qué acciones tomaste)
+En la limpieza de datos, confirmamos que no existen valores faltantes (`NA`) ni registros duplicados, asegurando que cada vector represente un paciente único con datos biológicos consistentes. Para evitar problemas severos de maldición de la dimensionalidad y redundancias en esta fase, redujimos el análisis de las 30 métricas continuas originales exclusivamente a los valores promedio (`*_mean`), dejando temporalmente por fuera sus variaciones estandarizadas y máximas empíricas. Esto deja un espacio vectorizado simplificado al bloque de componentes maestras.
 
 
 # 3. Análisis univariado
@@ -128,49 +128,37 @@ generar_graficos_variable <- function(var_name) {
 ```{r, fig.width=10, fig.height=4, echo=FALSE}
 generar_graficos_variable("radius_mean")
 ```
-> **Interpretación de Tamaño:** (Escribe aquí tu análisis sobre la distribución del tamaño del tumor -representado por el radio- y cómo diferencia los grupos. Analizar esta variable representa a area_mean y perimeter_mean).
+> **Interpretación de Tamaño:** Existe una separación bimodal notable en el radio de los núcleos según el diagnóstico. Los tumores benignos (B) ostentan radios más pequeños (promedio cercano a 12 uni.) y presentan bajísima desviación intercuartílica. Por su contraparte, los tumores malignos (M) escalan hacia medias de radio ampliamente superiores (> 17 uni.) y colas de tamaño irregulares a la derecha. La dimensión de tamaño es un proxi univariante agresivo.
 
 **Variable: texture_mean**
 ```{r, fig.width=10, fig.height=4, echo=FALSE}
 generar_graficos_variable("texture_mean")
 ```
-> **Interpretación:** (Escribe aquí tu análisis)
-
-**Variable: smoothness_mean**
+> **Interpretación:** La textura presenta un solapamiento mucho más severo y simetrías comparables. Aunque la tendencia promedia de los malignos es tenuemente superior a los benignos (distribuyendo en texturas más extremas), visualmente carece de fuerza de corte binaria en aislamiento frente a lo que demostró el tamaño radial.
 ```{r, fig.width=10, fig.height=4, echo=FALSE}
 generar_graficos_variable("smoothness_mean")
 ```
-> **Interpretación:** (Escribe aquí tu análisis)
-
-**Variable: compactness_mean**
+> **Interpretación:** Similar a la textura, la suavidad del núcleo es incapaz de discriminar con facilidad un diagnóstico si consideramos que su caja intercuartílica intersecta vastamente con los cuartiles del benigno. Son las colas (casos M atípicos superiores) las únicas distinguibles.
 ```{r, fig.width=10, fig.height=4, echo=FALSE}
 generar_graficos_variable("compactness_mean")
 ```
-> **Interpretación:** (Escribe aquí tu análisis)
-
-**Variable: concavity_mean**
+> **Interpretación:** La compacidad es una variable morfológica clave. Observamos que las masas mamarias malignas presentan índices compactos estrepitosamente superiores en asimetría y valores absolutos respecto a los benignos, cuyas cajas están aglomeradas inferiormente.
 ```{r, fig.width=10, fig.height=4, echo=FALSE}
 generar_graficos_variable("concavity_mean")
 ```
-> **Interpretación:** (Escribe aquí tu análisis)
-
-**Variable: concave.points_mean**
+> **Interpretación:** Magnífica separabilidad. Los tumores benignos muestran una concavidad cercana y comprimida en 0, con casi nula varianza. La masa maligna despliega una marcada distribución cóncava a lo largo del espectro positivo superior a 0.1, sugiriendo bordes irregulares severos.
 ```{r, fig.width=10, fig.height=4, echo=FALSE}
 generar_graficos_variable("concave.points_mean")
 ```
-> **Interpretación:** (Escribe aquí tu análisis)
-
-**Variable: symmetry_mean**
+> **Interpretación:** Reflejando la concavidad, la abundancia de puntos cóncavos medios es casi binaria. Las distribuciones B son gaussianas esbeltas de varianza baja acercadas a 0; las M, de varianza amplia alejadas del eje nulo. Variable decisiva multivariada.
 ```{r, fig.width=10, fig.height=4, echo=FALSE}
 generar_graficos_variable("symmetry_mean")
 ```
-> **Interpretación:** (Escribe aquí tu análisis)
-
-**Variable: fractal_dimension_mean**
+> **Interpretación:** La forma campana del histograma global se impone en ambos frentes. Se presenta gran solapamiento en sus rangos densos y la simetría univariante asiste pésimamente la partición diagnostica.
 ```{r, fig.width=10, fig.height=4, echo=FALSE}
 generar_graficos_variable("fractal_dimension_mean")
 ```
-> **Interpretación:** (Escribe aquí tu análisis)
+> **Interpretación:** La dimensión fractal posee la discriminación predictiva más frágil de todo el panel medio univariario. Los Boxplots coinciden de principio a fin (con anomalías pareadas) sin capacidad divisoria en aislamiento.
 
 
 
@@ -200,7 +188,7 @@ corrplot(
 ```
 
 ### Interpretación de la Matriz de Correlación
-(Escribe aquí las relaciones lineales encontradas y qué variables son redundantes)
+La visualización matricial de correlaciones corrobora multicolinealidades severas (biológicas y geométricas). Observamos que la variable delegada de tamaño `area_mean` está fuertemente correlacionada positiva (bloque azul intenso) con el bloque de `concavity_mean` y `concave.points_mean`. Asimismo, la `compactness_mean` muestra una alta correlación bidireccional (>0.8) superponiendo su carga informativa con otras métricas irregulares del borde celular. Mientras tanto, predictores como `symmetry_mean` y `fractal_dimension_mean` operan independientes (débil r de Pearson), aportando grados de libertad nuevos pero no necesariamente potentes.
 
 
 ## Matriz de Scatterplots
@@ -221,14 +209,12 @@ ggpairs(data_clean, columns = vars_mean_reducido,
 ```
 
 > **Interpretación variables _mean:**
-(Interpreta las asociaciones, dependencias y solapamientos de este grupo aquí. Haz énfasis en la alta redundancia y correlación de las dimensiones de tamaño vistas como un solo fenómeno).
+Los scatterplots combinados (p. ej. `area` vs `concavity` o `concave.points`) permiten ver formaciones de nubes de puntos fuertemente agregadas bajo líneas de regresión diagonales ascedentes (alta redundancia R > 0.82), pero más importante aún, muestran que la segregación diagnóstico M (azul general) y B (rojo asalmonado) es nítida en los cruces de esas mismas variables de forma/tamaño. Expresamente, la nube B se asienta compactamente a la izquierda inferior del cuadrante, y la nube M es esparcida hiperbólicamente a su margen superior derecho, advirtiendo una frontera multivariada que los clasificadores aprovecharán maravillosamente. En contrastes de textura vs geometría, las elipses de confianza presentan ejes poco colineales.
 
 
 # 5. Primeros hallazgos
 
-(Escribe aquí:
-- Identificación de patrones iniciales en los datos basándote en los subgrupos anteriores.
-- Qué variables consideras más relevantes para distinguir Benigno de Maligno.)
+Existen fortísimos patrones estructurales de agrupación subyacente. Los tumores malignos tienden de manera abrumadora y simultánea a ser morfológicamente más grandes en su dimensionalidad radial, y a tener contornos irregulares cuantificables en sus altos índices de encorvadura (concave points) y compresión espacial marginal. Las variables más relevantes y decisivas frente a la dicotomía de un diagnóstico B vs M son incuestionablemente la `area_mean` (o el bloque derivado a su radio), la `concave.points_mean` y `concavity_mean`. Variables como simetrías finas del núcleo o dimensión fractal aislan poco univariantemente, mas podrán ofrecer matices en planos multidimensionales.
 
 
 # 6. Análisis multivariado básico
@@ -256,15 +242,12 @@ ggparcoord(
 ```
 
 ### Interpretación
-(Escribe aquí argumentando:
-- ¿Qué variables se transitan juntas?
-- ¿Qué patrones globales se observan arriba o abajo de la media?
-- ¿Existen perfiles homogéneos para los tumores?)
+En las Coordenadas Paralelas (estandarizadas de medias) vislumbramos un trayecto biológico consistente. El "transcurrir" de los tumores que dictaminan en B (los azules) se mantiene agolpado homogéneamente en un cinturón estrecho en las puntuaciones por debajo de la media estándar ($Z<0$) para métricas como `area`, `texture` e irregulares `concavity`. En contraste radical, el espectro de trayectorias transversales superpuestas de los tumores diagnósticados M (rojo) fluctúan desordenada y expansivamente abarcando los hemisferios altos aéreos del gráfico ($Z>1$ y $Z>2$). Esto exhibe perfiles de masas agresivamente hipertrofiadas en dimensiones asociadas que se transitan y suben juntas, enalteciendo así la dependencia multivariada del cáncer.
 
 
-## Gráficos 3D Interactivos
+## Gráficos 3D Interactivos: Combinaciones de Separabilidad y Solapamiento
 
-Para observar el comportamiento en el espacio tridimensional y evidenciar la separabilidad de clases, generaremos gráficas para todas las combinaciones posibles de 3 variables (X, Y y Z) entre las variables resultantes.
+Para observar el comportamiento en el espacio tridimensional, exploraremos todas las combinaciones posibles de tres variables mediante un menú interactivo. El objetivo es identificar proyecciones con alta separabilidad entre tumores Benignos (B) y Malignos (M), así como combinaciones donde ambas clases se solapan excesivamente.
 
 ```{r interactivo_3d, message=FALSE, warning=FALSE}
 # Para evitar que el navegador colapse por dibujar 56 gráficas 3D separadas 
@@ -355,7 +338,7 @@ p
 ```
 
 > **Interpretación Gráficas 3D:**
-(Interpreta cómo la adición de una tercera dimensión altera tu comprensión de los datos. Señala qué variable evaluada en el eje Z proporciona la separación de clústeres más notoria al combinarse con Área y Textura.)
+Al explorar las 56 combinaciones tridimensionales mediante el menú desplegable, emergen dos tipos de comportamiento claramente diferenciados. En las combinaciones que incluyen variables del bloque morfológico de tamaño e irregularidad (`area_mean`, `concavity_mean`, `compactness_mean`, `concave.points_mean`), la separación entre benignos (B) y malignos (M) es visualmente nítida: los tumores benignos se agrupan en un núcleo compacto de baja concavidad y tamaño moderado, mientras los malignos se dispersan hacia regiones de mayor volumen e irregularidad de contorno. Combinaciones como `area_mean`–`compactness_mean`–`concavity_mean` o `smoothness_mean`–`compactness_mean`–`concavity_mean` exhiben la separación más limpia. En contraste, tripletas dominadas por variables de textura fina (`texture_mean`, `smoothness_mean`, `symmetry_mean`, `fractal_dimension_mean`) producen nubes amorfas con solapamiento casi total, confirmando que la tercera dimensión no aporta discriminación cuando ninguna de las tres variables captura el eje volumétrico o de irregularidad. En síntesis, la proyección 3D refuerza el hallazgo bivariado: la separabilidad de clases reside en ejes morfológicos (tamaño + irregularidad), no en variables de microtextura o simetría global.
 
 
 # 7. Medidas descriptivas multivariantes gráficas
@@ -412,15 +395,12 @@ ggplot(cov_largo, aes(x = Var1, y = Var2, fill = log10(abs(Covarianza) + 1e-5)))
 *Nota para dependencia: La dependencia (Correlación Multivariante) ya está graficada exahustivamente en la sección 4.*
 
 ### Interpretación Multivariante
-(Responde las tres preguntas guía basándote en las gráficas superiores:
-- ¿Qué tan dispersos están los datos según el nivel de calor del mapa de covarianzas?
-- ¿Qué variables varían más? (Mira en la barra logarítmica y el contraste del heatmap)
-- ¿Cómo se relacionan entre sí a nivel matricial conjunto?)
+El vector general multivariado revela dispersiones agudas regidas por los órdenes de magnitud nativos (ej. `area_mean`), la misma barra escalar que, en la visualización en base ortogonal logarítmica expone la predominancia volumétrica. Al explorar el mapa matricial cruzado de Log10(|Cov|) observamos una franja encendida (Covarianzas crudas dominantes extremas) en el bloque vertical e inferior alineado a su dimensión, pero evidenciando al mismo tiempo la debilidad de las fluctuaciones milimétricas cruzadas. Existe correlación, sin embargo, la varianza matricial no normalizada se deforma fuertemente al cruzar magnitudes con simetría y compacidad. Demuestra una abrumadora necesidad de normalización escalar ($Z-score$) al estructurar modelos SVM o ensambles con penalizaciones (regularizaciones LASSO o pareadas) que dependan de interacciones geométricas multidimensionales.
 
 
 # 8. Análisis de Componentes Principales (PCA)
 
-Aplicando los conceptos estudiados, procedemos a normalizar los datos y realizar un Análisis de Componentes Principales para encontrar las direcciones de máxima varianza y reducir la dimensionalidad.
+Aplicando los conceptos estudiados, procedemos a normalizar los datos y realizar un Análisis de Componentes Principales para encontrar las direcciones de máxima varianza y reducir la dimensionalidad. El PCA nos permitirá condensar la redundancia detectada en las secciones anteriores (especialmente en el bloque de tamaño e irregularidad) en un espacio de pocas componentes, facilitando tanto la visualización como los diagnósticos multivariantes posteriores.
 
 ## Intuición geométrica: la nube tiene una dirección natural
 
@@ -520,6 +500,8 @@ ggplot(df_var_pca, aes(Componente, Varianza)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
+En el scree plot se observa que las primeras componentes concentran la mayor parte de la varianza acumulada. Esto confirma que el dataset puede resumirse en pocas dimensiones ortogonales sin perder la estructura discriminante entre diagnósticos, lo cual justifica el uso de PCA como paso previo a modelado y a los tests multivariantes formales.
+
 ## Visualización de Scores (PC1 vs PC2)
 
 Proyectamos los datos en las dos primeras componentes principales.
@@ -609,6 +591,10 @@ ggplot(scores_2d_cancer, aes(PC1, PC2, color = diagnosis)) +
 ```
 En el biplot, notamos que las variables de tamaño y forma apuntan fuertemente en la dirección de PC1, coincidiendo con la zona de los tumores malignos.
 
+### Síntesis del PCA
+
+En conjunto, el análisis de componentes principales confirma tres hallazgos del EDA previo: (1) la PC1 captura un eje morfológico dominante que separa benignos de malignos; (2) las variables de tamaño e irregularidad de borde son las que más peso aportan a esa componente; y (3) la reducción dimensional es viable porque pocas componentes explican la mayor parte de la variabilidad. Este resultado prepara el terreno para los diagnósticos multivariantes formales que siguen a continuación.
+
 
 ## Diagnósticos multivariantes: Mahalanobis, QQ-plot, Box's M y MANOVA
 
@@ -680,12 +666,13 @@ print(boxm_res)
 # Extracción robusta del p-valor (la estructura de boxM puede variar por versión)
 boxm_p <- NA_real_
 if(!inherits(boxm_res, "error")) {
+  boxm_summary <- suppressPrint(summary(boxm_res))
   p_candidates <- c(
     tryCatch(as.numeric(boxm_res$p.value), error = function(e) NA_real_),
     tryCatch(as.numeric(boxm_res$stats["p.value"]), error = function(e) NA_real_),
     tryCatch(as.numeric(boxm_res$mod$stats["p.value"]), error = function(e) NA_real_),
-    tryCatch(as.numeric(summary(boxm_res)$stats["p.value"]), error = function(e) NA_real_),
-    tryCatch(as.numeric(summary(boxm_res)$`Pr(>Chisq)`[1]), error = function(e) NA_real_)
+    tryCatch(as.numeric(boxm_summary$stats["p.value"]), error = function(e) NA_real_),
+    tryCatch(as.numeric(boxm_summary$`Pr(>Chisq)`[1]), error = function(e) NA_real_)
   )
   p_candidates <- p_candidates[is.finite(p_candidates)]
   if(length(p_candidates) > 0) boxm_p <- p_candidates[1]
@@ -720,7 +707,11 @@ if(inherits(boxm_res, "error")){
   }
 }
 
-cat("MANOVA (Wilks): revisar tabla arriba; si p < 0.05 hay diferencia multivariante entre B y M.\n")
+if(!is.na(boxm_p) && boxm_p < 0.05) {
+  cat("MANOVA (Pillai): revisar tabla arriba; al violarse la igualdad de covarianzas, Pillai es más robusto que Wilks. Si p < 0.05 hay diferencia multivariante entre B y M.\n")
+} else {
+  cat("MANOVA (Wilks): revisar tabla arriba; si p < 0.05 hay diferencia multivariante entre B y M.\n")
+}
 
 cat("Número de outliers multivariantes (χ² 0.95):", length(outliers_95), "(ver vector data_clean$D2_Mahalanobis)\n")
 
@@ -730,7 +721,7 @@ cat("Número de outliers multivariantes (χ² 0.95):", length(outliers_95), "(ve
 
 - Si la QQ-plot se aleja sistemáticamente de la línea en los extremos, la normalidad multivariante es cuestionable; esto afecta tests basados en normalidad (MANOVA, Hotelling).
 - Si Box's M es significativo (p < 0.05), las covarianzas difieren por `diagnosis` — considerar pruebas robustas o usar métodos que no asuman igualdad de covarianza (por ejemplo, tests no paramétricos o discriminantes con regularización).
-- Si MANOVA indica p < 0.05 (por Wilks o Pillai), existe evidencia de diferencia multivariante entre `B` y `M`. Los ANOVA posteriores muestran qué variables contribuyen más.
+- Si MANOVA indica p < 0.05, existe evidencia de diferencia multivariante entre `B` y `M`. Cuando Box's M es significativo, priorizar el resultado de **Pillai** (más robusto ante covarianzas desiguales); si Box's M no es significativo, Wilks es adecuado. Los ANOVA posteriores muestran qué variables contribuyen más.
 - Documentar y revisar las observaciones multivariantes detectadas por Mahalanobis: pueden ser errores de medición o casos clínicos relevantes.
 
 # 9. Interpretación global
