@@ -1,0 +1,904 @@
+---
+title: "Informe Final de Estadística Multidimensional - Wisconsin Breast Cancer Dataset"
+subtitle: "Un Enfoque Integrado en Oncología Computacional: PCA, MANOVA y Análisis Factorial"
+author: "Julian Cabrera, Andres Carvajal, Mauricio Sanchez, Jaider Carvajal, Nelson Posso"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+    theme: cosmo
+    code_folding: show
+    fig_width: 9
+    fig_height: 6
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.align = "center")
+# Tras cada Knit, si el linter de VS Code marca la línea del HTML, ejecuta:
+# source("fix_bootstrap_css.R")
+```
+
+# INTRODUCCIÓN Y CONTEXTO DEL PROBLEMA
+
+## Descripción del Problema Clínico
+El cáncer de mama es una de las neoplasias malignas con mayor incidencia y la principal causa de muerte por cáncer en mujeres a nivel global. El diagnóstico preciso y temprano representa el factor más crítico para determinar el pronóstico de la paciente y la selección de la terapia oncológica adecuada. Clínicamente, el estándar de oro inicial para evaluar nódulos o masas mamarias sospechosas es la **Biopsia por Aspiración con Aguja Fina (FNAB, por sus siglas en inglés)**. 
+
+Este procedimiento mínimamente invasivo extrae una muestra de líquido y células de la lesión, la cual es examinada microscópicamente. La muestra se digitaliza para calcular características morfológicas tridimensionales de los núcleos de las células (como su volumen, deformidad, rugosidad de bordes y densidad cromática). El desafío médico consiste en clasificar con total fiabilidad si la masa mamaria es **Benigna** (lesión no cancerosa, como quistes o fibroadenomas que solo requieren monitoreo) o **Maligna** (carcinoma invasivo que exige intervención quirúrgica inmediata y quimioterapia/radioterapia), reduciendo a cero los falsos negativos y evitando al mismo tiempo biopsias quirúrgicas invasivas de alto costo y riesgo psicológico para pacientes benignas.
+
+## Importancia del Análisis Multivariante
+Los procesos de oncogénesis y progresión del cáncer alteran profundamente la fisiología celular. Sin embargo, las células cancerosas no modifican una sola de sus características en aislamiento. La hipertrofia del núcleo (incremento en volumen y área), la desorganización de la envoltura nuclear (irregularidades de contorno y concavidades) y las alteraciones en el empaquetamiento de la cromatina (microtextura) ocurren de forma simultánea debido a la inestabilidad genómica y metabólica celular. 
+
+Por ende, evaluar estas variables por separado mediante análisis univariados tradicionales no solo ignora la compleja interdependencia biofísica subyacente (multicolinealidad geométrica y biológica), sino que incrementa drásticamente la tasa de falsos positivos y de errores de tipo I debido a la realización de múltiples pruebas simultáneas. El **Análisis Multivariante** surge como el marco metodológico idóneo, pues captura la matriz de covarianza conjunta de los perfiles celulares, permitiendo rotar geométricamente los datos para extraer varianza latente (PCA), contrastar inferencialmente perfiles de grupo en espacios vectoriales (MANOVA) y descubrir las estructuras biológicas ocultas que gobiernan la correlación celular (Análisis Factorial).
+
+## Objetivos del Trabajo
+* **Objetivo General**: Evaluar, caracterizar y modelar la estructura multidimensional de las propiedades morfológicas y de textura de núcleos celulares obtenidos por FNAB para discriminar de forma óptima masas benignas de malignas, estableciendo un marco de decisión clínica de alta fiabilidad.
+* **Objetivos Específicos**:
+  1. *Reducción de Dimensionalidad*: Implementar un Análisis de Componentes Principales (PCA) para comprimir la variabilidad de las variables continuas altamente colineales en un número óptimo de componentes ortogonales, visualizando de forma geométrica y estadística la separación entre clases de diagnóstico.
+  2. *Inferencia Multivariante*: Desarrollar un Análisis de Varianza Multivariante (MANOVA) formal para contrastar la hipótesis nula de igualdad de vectores de medias entre tumores Benignos (B) y Malignos (M), evaluando con rigor los supuestos distributivos de normalidad multivariante (Mahalanobis) y homocedasticidad matricial (Box's M).
+  3. *Modelado de Constructos Ocultos*: Aplicar un Análisis Factorial Exploratorio (EFA) con estimación por máxima verosimilitud y rotación Varimax para descubrir y nombrar conceptualmente las dimensiones biológicas latentes que explican la correlación observada en las variables morfológicas del tumor.
+  4. *Evaluación de la Aplicación Predictiva*: Diseñar y comparar un pipeline de clasificación supervisada (Regresión Logística, LDA, Árboles de Decisión y PCA + kNN) validado mediante validación cruzada para estimar la capacidad predictiva y la sensibilidad clínica del espacio multivariante estructurado.
+
+---
+
+# DESCRIPCIÓN DEL DATASET
+
+El conjunto de datos corresponde al renombrado **Breast Cancer Wisconsin (Diagnostic) Dataset**, disponible en el prestigioso UCI Machine Learning Repository y recopilado originalmente por investigadores del Hospital de la Universidad de Wisconsin, Madison.
+
+## Dimensiones del Dataset
+El dataset está conformado por **569 observaciones** (pacientes que se sometieron a una punción FNAB de masa mamaria) y **32 variables** en su estructura cruda.
+
+## Tipo de Datos y Variables
+La variable predictora principal y objetivo es categórica nominal:
+* `diagnosis`: Diagnóstico de la masa mamaria, codificado como **'B'** (Benigno, $n = 357$, $62.7\%$) o **'M'** (Maligno, $n = 212$, $37.3\%$).
+
+Las variables explicativas corresponden a 30 métricas radiómicas continuas de escala física, que representan propiedades geométricas y de textura del núcleo celular. Estas provienen del cálculo de 10 características morfológicas base expresadas en tres estimadores: la media aritmética de la célula (`_mean`), el error estándar de la medición (`_se`), y el "peor" valor extremo o máximo registrado en el portaobjetos (`_worst`).
+
+Las 10 características base y su significado biofísico-clínico son:
+1. **Radio (`radius`)**: Media de las distancias desde el baricentro del núcleo hasta los puntos extremos de la membrana nuclear. Indica hipertrofia o tamaño.
+2. **Textura (`texture`)**: Desviación estándar de los niveles de escala de grises de los píxeles dentro de la cromatina celular. Refleja heterogeneidad de empaquetamiento del ADN.
+3. **Perímetro (`perimeter`)**: Longitud total de la envoltura externa del núcleo celular.
+4. **Área (`area`)**: Superficie total ocupada por el núcleo. Es un proxi volumétrico del núcleo celular.
+5. **Suavidad (`smoothness`)**: Variación local en la longitud de los radios nucleares consecutivos. Una suavidad baja (alto valor numérico) indica un contorno accidentado.
+6. **Compacidad (`compactness`)**: Métrica de redondez nuclear, calculada mediante la fórmula geométrica $\frac{\text{perímetro}^2}{\text{área}} - 1.0$. Tumores malignos suelen tener compacidades extremas.
+7. **Concavidad (`concavity`)**: Severidad de las hendiduras o entrantes locales del contorno de la membrana nuclear.
+8. **Puntos Cóncavos (`concave.points`)**: Número de porciones discretas cóncavas o depresiones detectadas en el contorno del núcleo.
+9. **Simetría (`symmetry`)**: Medida de balance geométrico nuclear. Núcleos altamente asimétricos son un signo típico de atipia mitótica.
+10. **Dimensión Fractal (`fractal_dimension`)**: Complejidad estructural del contorno celular evaluada mediante aproximación de recuento de cajas ("box-counting").
+
+---
+
+# LIMPIEZA Y PREPARACIÓN DE DATOS
+
+Para estructurar nuestro marco multivariado con el máximo rigor estadístico, aplicaremos un pipeline reproducible de limpieza y adecuación técnica de datos en R.
+
+```{r preparacion_datos}
+# Carga y verificación automática de paquetes
+paquetes <- c("tidyverse", "corrplot", "GGally", "MASS", "gridExtra", "plotly", "htmltools", "scales", "psych", "heplots", "caret", "pROC", "rpart")
+paquetes_faltantes <- paquetes[!(paquetes %in% installed.packages()[,"Package"])]
+if(length(paquetes_faltantes)) {
+  install.packages(paquetes_faltantes, repos = "http://cran.us.r-project.org")
+}
+
+library(tidyverse)
+library(corrplot)
+library(GGally)
+library(MASS)
+library(gridExtra)
+library(plotly)
+library(htmltools)
+library(scales)
+library(psych)
+library(heplots)
+library(caret)
+library(pROC)
+library(rpart)
+
+# Lectura del dataset
+data <- read_csv('Cancer_Data.csv', show_col_types = FALSE)
+
+# Estandarización de nombres de variables en formato R-compatible
+names(data) <- make.names(names(data))
+
+# 1. Remoción de columnas redundantes no informativas (como IDs o columnas vacías)
+data_clean <- data %>%
+  dplyr::select(where(~!all(is.na(.)))) %>%
+  dplyr::select(-any_of(c("id", "X")))
+
+# 2. Conversión del diagnóstico a factor
+data_clean$diagnosis <- as.factor(data_clean$diagnosis)
+
+# 3. Auditoría de datos faltantes (NA)
+sum_na <- colSums(is.na(data_clean))
+cat("Total de valores faltantes (NA) en el dataset:", sum(sum_na), "\n")
+
+# 4. Auditoría de duplicados
+num_duplicados <- data_clean %>% duplicated() %>% sum()
+cat("Total de registros duplicados excluidos:", num_duplicados, "\n")
+data_clean <- data_clean %>% distinct()
+
+# 5. Selección Analítica del Subconjunto de Medias (*_mean)
+# Explicación: Se retienen únicamente los valores de promedios para evitar colinealidades
+# triviales e intrínsecas (ej. correlaciones casi perfectas de radio_mean con radio_worst)
+# y reducir el riesgo de maldición de la dimensionalidad, manteniendo una representatividad óptima.
+data_clean <- data_clean %>% dplyr::select(diagnosis, ends_with("_mean"))
+data_num <- data_clean %>% dplyr::select(where(is.numeric))
+```
+
+## Tratamiento de Datos Faltantes y Duplicados
+La auditoría revela que el dataset cuenta con **0 valores faltantes (NA)** y **0 registros duplicados**, garantizando la consistencia y la integridad muestral del espacio vectorial original sin necesidad de imputación.
+
+## Selección de Variables
+Para mitigar la maldición de la dimensionalidad y evitar redundancias físicas y geométricas triviales (la correlación directa entre el promedio, el error estándar y el valor máximo de la misma característica del núcleo celular), seleccionamos analíticamente las **10 variables de medias (`*_mean`)**. Esto reduce nuestro espacio dimensional a un bloque denso e informativo que captura la firma celular promedia de cada paciente.
+
+## Justificación de la Estandarización ($Z$-score)
+Las 10 variables continuas están medidas en unidades físicas y escalas sumamente heterogéneas. Por ejemplo, el área del tumor (`area_mean`) presenta una media muestral de $654.89\ \mu\text{m}^2$ con desviaciones estándar que superan los $350$, mientras que la dimensión fractal (`fractal_dimension_mean`) promedia $0.06$ con una desviación del orden de $0.007$. 
+
+Si aplicáramos técnicas como PCA o Mahalanobis directamente sobre los datos crudos, la variable `area_mean` aportaría casi el $99.9\%$ de la variabilidad debido a su magnitud absoluta, silenciando por completo variables microscópicas decisivas como la deformación del contorno. Por tanto, es obligatorio aplicar la estandarización o normalización de puntuación estándar $Z$:
+
+$$Z_{ij} = \frac{X_{ij} - \bar{X}_j}{S_j}$$
+
+Donde cada observación se transforma restando su media muestral $\bar{X}_j$ y dividiendo por su desviación estándar $S_j$. Esto sitúa a todas las métricas en una escala adimensional común con $\mu = 0$ y $\sigma^2 = 1$, permitiendo una comparación geométrica equitativa y simétrica en todas las dimensiones del espacio.
+
+---
+
+# EXPLORACIÓN MULTIVARIANTE
+
+Antes de modelar, es crítico explorar visual y descriptivamente la estructura de relaciones multidimensionales.
+
+## Análisis Descriptivo Univariado y Multivariado
+Construiremos una tabla resumen con estadísticos de centralización (Media, Mediana) y variabilidad (Desviación Estándar y Rango Intercuartílico) de nuestras variables de interés.
+
+```{r analisis_descriptivo}
+medidas_resumen <- data.frame(
+  Media = apply(data_num, 2, mean),
+  Mediana = apply(data_num, 2, median),
+  Desviacion = apply(data_num, 2, sd),
+  IQR = apply(data_num, 2, IQR)
+)
+round(medidas_resumen, 4)
+```
+
+## Matriz de Correlación Visual
+Visualizaremos la correlación lineal de Pearson entre las variables para detectar bloques estructurados de covarianza. Para enfocar la visualización de redundancias, omitimos temporalmente las variables duplicadas idénticas de tamaño `radius_mean` y `perimeter_mean`, delegando esta dimensión a la variable volumétrica `area_mean`.
+
+```{r correlacion_visual_informe, fig.width=9, fig.height=9}
+data_num_reducido <- data_num %>% dplyr::select(-radius_mean, -perimeter_mean)
+mat_cor <- cor(data_num_reducido)
+
+corrplot(
+  mat_cor,
+  method = "color",
+  type = "upper",
+  addCoef.col = "black", 
+  number.cex = 0.8,
+  tl.col = "black",
+  tl.srt = 45,
+  title = "Matriz de Correlación Bivariada Cruzada (Pearson)",
+  mar = c(0, 0, 2, 0)
+)
+```
+
+### Interpretación de Relaciones
+La matriz bivariada cruzada expone multicolinealidades severas de origen morfológico:
+* **El Bloque de irregularidad y compacidad**: La compacidad (`compactness_mean`), concavidad (`concavity_mean`) y puntos cóncavos (`concave.points_mean`) exhiben coeficientes de correlación extremadamente altos ($r \geq 0.83$ y llegando a $r = 0.92$), indicando redundancia de información biológica de deformación.
+* **Tamaño vs Irregularidad**: El área nuclear (`area_mean`) muestra una correlación moderada-alta con la presencia de concavidades ($r = 0.69$) y puntos cóncavos ($r = 0.82$). Esto sugiere que los tumores físicamente más grandes experimentan simultáneamente una alteración de borde y una envoltura más accidentada.
+* **Variables Independientes**: La simetría (`symmetry_mean`) y textura (`texture_mean`) muestran correlaciones débiles con las demás variables morfológicas ($r < 0.35$), operando de forma autónoma aportando información ortogonal al sistema celular.
+
+## Gráficos de Coordenadas Paralelas (Perfiles de Grupo)
+Para comprender cómo viaja el perfil multivariado estandarizado de cada paciente según su diagnóstico clínico, graficamos los vectores de datos completos.
+
+```{r coordenadas_paralelas_informe, fig.width=10, fig.height=6}
+ggparcoord(
+  data_clean,
+  columns = 2:ncol(data_clean),
+  groupColumn = "diagnosis",
+  scale = "std",
+  alphaLines = 0.25
+) +
+  scale_color_manual(values = c("B" = "dodgerblue", "M" = "tomato")) +
+  theme_minimal(base_size = 12) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(
+    title = "Coordenadas Paralelas (Puntuaciones Estandarizadas Z)",
+    subtitle = "Sinfonía Multivariante: Perfiles Benignos (azul) vs Malignos (rojo)",
+    x = "Métrica Celular",
+    y = "Puntuación Estándar Z"
+  )
+```
+
+### Interpretación de Perfiles
+El gráfico de Coordenadas Paralelas revela un patrón biológico altamente contrastante:
+* **Cinturón Benigno (azul)**: Los perfiles celulares benignos viajan muy agrupados y estables en la zona baja del gráfico ($Z < 0$). Muestran una variabilidad reducida y homogeneidad estructural.
+* **Espectro Maligno (rojo)**: Los perfiles de tumores malignos se dispersan en forma caótica en el hemisferio superior del gráfico, superando valores de $Z > 1$ e incluso $Z > 3$. Esto evidencia que los núcleos cancerosos tienden simultáneamente a hipertrofiarse morfológicamente en múltiples ejes de manera conjunta y desordenada.
+
+## Gráfico 3D Interactivo
+Para explorar el comportamiento geométrico en el espacio tridimensional de las 56 posibles tripletas de variables, construimos una gráfica interactiva con un menú de selección en base a variables morfológicas clave.
+
+```{r interactivo_3d_informe, message=FALSE, warning=FALSE}
+vars_combinar <- c("area_mean", "texture_mean", "smoothness_mean", "compactness_mean", "symmetry_mean", "concavity_mean", "concave.points_mean", "fractal_dimension_mean")
+combinaciones_3d <- combn(vars_combinar, 3, simplify = FALSE)
+
+data_B <- data_clean %>% filter(diagnosis == "B")
+data_M <- data_clean %>% filter(diagnosis == "M")
+
+v_x_ini <- combinaciones_3d[[1]][1]
+v_y_ini <- combinaciones_3d[[1]][2]
+v_z_ini <- combinaciones_3d[[1]][3]
+
+p_3d <- plot_ly() %>%
+  add_trace(x = data_B[[v_x_ini]], y = data_B[[v_y_ini]], z = data_B[[v_z_ini]], 
+            type = "scatter3d", mode = "markers", name = "Benigno (B)",
+            marker = list(color = "dodgerblue", size = 4, opacity = 0.7)) %>%
+  add_trace(x = data_M[[v_x_ini]], y = data_M[[v_y_ini]], z = data_M[[v_z_ini]], 
+            type = "scatter3d", mode = "markers", name = "Maligno (M)",
+            marker = list(color = "tomato", size = 4, opacity = 0.7))
+
+botones <- lapply(combinaciones_3d, function(vars) {
+  x_v <- vars[1]
+  y_v <- vars[2]
+  z_v <- vars[3]
+  
+  label_limpio <- paste(gsub("_mean", "", x_v), 
+                        gsub("_mean", "", y_v), 
+                        gsub("_mean", "", z_v), sep = ", ")
+  
+  list(
+    method = "update",
+    args = list(
+      list(
+        x = list(data_B[[x_v]], data_M[[x_v]]),
+        y = list(data_B[[y_v]], data_M[[y_v]]),
+        z = list(data_B[[z_v]], data_M[[z_v]])
+      ),
+      list(
+        title = paste("Proyección Tridimensional:", x_v, "vs", y_v, "vs", z_v),
+        scene = list(
+          xaxis = list(title = x_v),
+          yaxis = list(title = y_v),
+          zaxis = list(title = z_v)
+        )
+      )
+    ),
+    label = label_limpio
+  )
+})
+
+p_3d <- p_3d %>% layout(
+  title = paste("Proyección Tridimensional:", v_x_ini, "vs", v_y_ini, "vs", v_z_ini),
+  scene = list(
+    xaxis = list(title = v_x_ini),
+    yaxis = list(title = v_y_ini),
+    zaxis = list(title = v_z_ini)
+  ),
+  updatemenus = list(
+    list(
+      type = "dropdown",
+      active = 0,
+      buttons = botones,
+      x = 0,
+      xanchor = "left",
+      y = 1.15,
+      yanchor = "top",
+      bgcolor = "white",
+      pad = list(t = 10)
+    )
+  ),
+  margin = list(l = 0, r = 0, b = 0, t = 80)
+)
+p_3d
+```
+
+### Interpretación Geométrica de Separación y Solapamiento
+* **Zonas de Alta Separabilidad (Menú Desplegable)**: En tripletas que cruzan ejes morfológicos combinados de tamaño e irregularidad de borde celular (e.g. `area_mean`, `compactness_mean`, `concavity_mean`), las nubes de puntos de benignos y malignos se segregan casi de forma perfecta. El grupo benigno se concentra compactamente en un clúster de bajo volumen y suavidad celular, mientras que las células malignas se esparcen en una cola hiperbólica de gran área e irregularidad extrema, permitiendo trazar planos de corte geométrico nítidos.
+* **Zonas de Alto Solapamiento**: En contraposición, tripletas conformadas puramente por variables de microtextura y simetría global (e.g., `texture_mean`, `smoothness_mean`, `symmetry_mean`) generan nubes de puntos completamente fusionadas y amorfas. Esto confirma empíricamente que la tercera dimensión no provee poder discriminatorio en el diagnóstico oncológico cuando carece de un eje de escala o volumen del núcleo.
+
+## Localización y Dispersión Conjunta Multivariada
+
+```{r localizacion_dispersion_graficas, fig.width=9, fig.height=5}
+# Localización: Media Vectorial
+media_vectorial <- colMeans(data_num)
+df_media <- data.frame(
+  Variable = names(media_vectorial),
+  Media = media_vectorial
+)
+
+p_loc <- ggplot(df_media, aes(x = reorder(Variable, Media), y = Media)) +
+  geom_col(fill = "dodgerblue", alpha = 0.8) +
+  coord_flip() +
+  scale_y_log10() + 
+  theme_minimal(base_size = 11) +
+  labs(
+    title = "Media Vectorial (Localización)",
+    subtitle = "Escala Log10 por heterogeneidad de magnitudes",
+    x = "Variable Métrica",
+    y = "Media Muestral (log10)"
+  )
+
+# Dispersión: Heatmap de Covarianza
+mat_cov <- cov(data_num)
+cov_largo <- as.data.frame(as.table(mat_cov))
+colnames(cov_largo) <- c("Var1", "Var2", "Covarianza")
+
+p_disp <- ggplot(cov_largo, aes(x = Var1, y = Var2, fill = log10(abs(Covarianza) + 1e-5))) +
+  geom_tile(color = "white") +
+  scale_fill_viridis_c(option = "magma", name = "Log10(|Cov|)") +
+  theme_minimal(base_size = 11) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(
+    title = "Mapa de Covarianzas (Dispersión)",
+    x = "", y = ""
+  )
+
+grid.arrange(p_loc, p_disp, ncol = 2)
+```
+
+---
+
+# ANÁLISIS DE COMPONENTES PRINCIPALES (PCA)
+
+El PCA busca simplificar este espacio multidimensional altamente colineal, construyendo nuevas componentes ortogonales que concentren la máxima varianza.
+
+## Fundamentos Matemáticos del PCA
+Partiendo de nuestra matriz de datos estandarizada $\mathbf{Z}_{n \times p}$, la matriz de correlación muestral es $\mathbf{R} = \frac{1}{n-1}\mathbf{Z}^T\mathbf{Z}$. El PCA realiza la descomposición espectral de la matriz simétrica de correlación:
+
+$$\mathbf{R} = \mathbf{V}\mathbf{\Lambda}\mathbf{V}^T$$
+
+Donde $\mathbf{\Lambda} = \text{diag}(\lambda_1, \lambda_2, \dots, \lambda_p)$ es la matriz de autovalores ordenados de forma decreciente ($\lambda_1 \geq \lambda_2 \geq \dots \geq \lambda_p \geq 0$) que representan la varianza explicada por cada componente, y $\mathbf{V} = [\mathbf{v}_1, \mathbf{v}_2, \dots, \mathbf{v}_p]$ es la matriz ortogonal de autovectores (los *loadings* de las componentes). Los *scores* de los individuos se obtienen mediante la proyección ortogonal $\mathbf{Y} = \mathbf{Z}\mathbf{V}$.
+
+## Intuición Geométrica (Caso Bidimensional)
+Visualizaremos cómo el PCA encuentra la dirección de máxima varianza y dibuja sus autovectores directamente sobre la nube de datos bidimensional estandarizada formada por `radius_mean` y `compactness_mean`.
+
+```{r pca_intuicion_geometrica_informe, fig.width=8, fig.height=6}
+df_2d <- as.data.frame(scale(data_num %>% dplyr::select(radius_mean, compactness_mean)))
+centro_2d <- colMeans(df_2d)
+eig_2d <- eigen(cov(df_2d))
+
+vectores_2d <- data.frame(
+  x = centro_2d[1],
+  y = centro_2d[2],
+  xend = centro_2d[1] + eig_2d$vectors[1, ] * sqrt(eig_2d$values) * 2.5,
+  yend = centro_2d[2] + eig_2d$vectors[2, ] * sqrt(eig_2d$values) * 2.5,
+  Componente = c("PC1: Dirección de Máxima Varianza", "PC2: Varianza Restante")
+)
+
+g_ejes <- ggplot(df_2d, aes(radius_mean, compactness_mean)) +
+  geom_point(alpha = 0.40, size = 1.5, color = "gray50") +
+  stat_ellipse(type = "norm", linewidth = 1.1, color = "dodgerblue") +
+  geom_segment(
+    data = vectores_2d,
+    aes(x = x, y = y, xend = xend, yend = yend),
+    inherit.aes = FALSE,
+    arrow = arrow(length = unit(0.25, "cm")),
+    linewidth = 1.3,
+    color = "tomato"
+  ) +
+  geom_point(aes(x = centro_2d[1], y = centro_2d[2]), size = 3, color = "tomato") +
+  coord_equal() +
+  labs(
+    title = "PCA como Rotación Geométrica de los Ejes Naturales",
+    subtitle = "PC1 se alinea con la elipse de covarianza; PC2 es ortogonal",
+    x = "Radius Mean (Estandarizado Z)",
+    y = "Compactness Mean (Estandarizado Z)"
+  ) +
+  theme_minimal(base_size = 12)
+
+ggplotly(g_ejes)
+```
+
+## PCA en las 10 Variables de Medias
+Calculamos el PCA formal sobre el bloque completo de 10 variables numéricas del tumor utilizando estandarización previa.
+
+```{r pca_calculo_completo}
+pca_cancer <- prcomp(data_num, center = TRUE, scale. = TRUE)
+summary(pca_cancer)
+```
+
+## Scree Plot y Varianza Explicada
+Graficamos la proporción de varianza y la varianza acumulada de las componentes para tomar una decisión informada de retención.
+
+```{r scree_plot_pca_informe, fig.width=9, fig.height=5}
+var_pca <- (pca_cancer$sdev^2) / sum(pca_cancer$sdev^2)
+df_var_pca <- data.frame(
+  Componente = paste0("PC", seq_along(var_pca)),
+  Varianza = var_pca,
+  Acumulada = cumsum(var_pca)
+)
+df_var_pca$Componente <- factor(df_var_pca$Componente, levels = df_var_pca$Componente)
+
+ggplot(df_var_pca, aes(Componente, Varianza)) +
+  geom_col(fill = "dodgerblue", alpha = 0.8) +
+  geom_line(aes(y = Acumulada, group = 1), linewidth = 1.1, color = "tomato") +
+  geom_point(aes(y = Acumulada), size = 3, color = "tomato") +
+  scale_y_continuous(labels = percent_format()) +
+  labs(
+    title = "Scree Plot y Varianza Acumulada Explicada",
+    subtitle = "Las dos primeras componentes concentran el 81.4% de la información celular",
+    x = "Componente Principal",
+    y = "Proporción de Varianza Explicada"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+### Criterio de Retención
+* **Criterio de Kaiser (Autovalores > 1)**: Las primeras dos componentes poseen autovalores $\lambda_1 = 5.63$ y $\lambda_2 = 2.51$ superiores a $1.0$, reteniendo en conjunto el **$81.4\%$** de la varianza total.
+* **Criterio del Codo**: Se observa un claro "quiebre" o codo en la PC2, sugiriendo que la inclusión de una tercera componente (PC3, que solo aporta un $8.9\%$) entrega rendimientos marginales. Por ende, **2 componentes principales** bastan para una reducción masiva sin pérdida relevante de la señal de discriminación oncológica.
+
+## Interpretación de Loadings (Pesos)
+Analizamos cómo las variables originales contribuyen a cada componente para dotarlas de significado conceptual.
+
+```{r loadings_pca_informe, fig.width=9, fig.height=5}
+loadings_cancer <- as.data.frame(pca_cancer$rotation)
+loadings_cancer$Variable <- rownames(loadings_cancer)
+
+loadings_long <- loadings_cancer |>
+  tidyr::pivot_longer(cols = starts_with("PC"), names_to = "Componente", values_to = "Loading")
+
+ggplot(loadings_long |> filter(Componente %in% c("PC1", "PC2")),
+       aes(x = reorder(Variable, Loading), y = Loading, fill = Componente)) +
+  geom_col(position = "dodge", alpha = 0.8) +
+  scale_fill_manual(values = c("PC1" = "dodgerblue", "PC2" = "tomato")) +
+  coord_flip() +
+  labs(
+    title = "Loadings (Cargas) de las dos primeras Componentes Principales",
+    subtitle = "PC1 refleja tamaño y severidad de borde; PC2 captura textura y suavidad",
+    x = "Variable Métrica Original",
+    y = "Carga del Autovector"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+### Interpretación de Componentes
+* **PC1 (Eje de Masa y Severidad de Contorno)**: Presenta cargas negativas altas y muy homogéneas ($v_{1j} \approx -0.36$) en variables volumétricas (`area_mean`, `perimeter_mean`, `radius_mean`) e irregularidades del contorno (`concave.points_mean`, `concavity_mean`, `compactness_mean`). Esta componente representa el nivel general de **agresividad y gigantismo de deformación nuclear** de la muestra.
+* **PC2 (Eje de Complejidad Microestructural)**: Carga positivamente de forma predominante en variables de microtextura y redondez fractal (`fractal_dimension_mean`, `symmetry_mean`, `smoothness_mean`). Capta la **complejidad fina y homogeneidad del contorno** nuclear con independencia del tamaño de la masa.
+
+## Proyección de Scores (Individuos en el Nuevo Plano)
+
+```{r scores_pca_informe, fig.width=8, fig.height=6}
+scores_cancer <- as.data.frame(pca_cancer$x)
+scores_cancer$diagnosis <- data_clean$diagnosis
+
+g_scores <- ggplot(scores_cancer, aes(PC1, PC2, color = diagnosis)) +
+  geom_point(size = 2.5, alpha = 0.7) +
+  scale_color_manual(values = c("B" = "dodgerblue", "M" = "tomato")) +
+  labs(
+    title = "Scores PCA: Muestras Proyectadas en el Plano Ortogonal PC1-PC2",
+    subtitle = "Separación clínica nítida y natural de benignos (azul) y malignos (rojo)",
+    x = "PC1 (Masa y Severidad: 56.3%)",
+    y = "PC2 (Complejidad Microestructural: 25.1%)",
+    color = "Diagnóstico"
+  ) +
+  theme_minimal(base_size = 12)
+
+ggplotly(g_scores)
+```
+
+### Interpretación de Nubes de Puntos
+La proyección de scores muestra una **separación diagnóstica nítida y rotunda a lo largo del eje PC1**:
+* Los tumores benignos (B, azul) se concentran estrechamente a la izquierda del plano ($PC1 < 0$).
+* Los tumores malignos (M, rojo) se dispersan de forma expansiva a la derecha ($PC1 > 0$).
+Esto confirma que la primera componente de "Masa y Severidad" es un indicador oncológico potentísimo para separar ambas clases diagnósticas.
+
+## Biplot Integrado
+
+```{r biplot_pca_informe, fig.width=10, fig.height=8}
+loadings_2d <- as.data.frame(pca_cancer$rotation[, 1:2])
+loadings_2d$Variable <- rownames(loadings_2d)
+factor_flechas <- 5
+
+ggplot(scores_cancer, aes(PC1, PC2, color = diagnosis)) +
+  geom_point(size = 2, alpha = 0.4) +
+  scale_color_manual(values = c("B" = "dodgerblue", "M" = "tomato")) +
+  geom_segment(
+    data = loadings_2d,
+    aes(x = 0, y = 0, xend = PC1 * factor_flechas, yend = PC2 * factor_flechas),
+    inherit.aes = FALSE,
+    arrow = arrow(length = unit(0.25, "cm")),
+    linewidth = 1,
+    color = "black"
+  ) +
+  geom_text(
+    data = loadings_2d,
+    aes(x = PC1 * factor_flechas * 1.15, y = PC2 * factor_flechas * 1.15, label = Variable),
+    inherit.aes = FALSE,
+    size = 4,
+    color = "black",
+    fontface = "bold"
+  ) +
+  labs(
+    title = "Biplot PCA: Variables y Observaciones Conjuntas",
+    subtitle = "Los vectores de tamaño e irregularidad apuntan y arrastran a la nube Maligna",
+    x = "PC1 (56.3%)",
+    y = "PC2 (25.1%)",
+    color = "Diagnóstico"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+### Interpretación del Biplot
+Las flechas vectoriales que representan variables de tamaño celular (`area`, `radius`, `perimeter`) y deformación de contorno (`concave.points`, `concavity`) apuntan al cuadrante derecho en la dirección del PC1 positivo. Esto demuestra de forma visual y matemática su fortísima asociación directa con la presencia de tumores malignos (M), validando los preceptos patológicos sobre el comportamiento desordenado y sobredimensionado del cáncer de mama.
+
+---
+
+# ANÁLISIS DE VARIANZA MULTIVARIANTE (MANOVA)
+
+El MANOVA permite contrastar formalmente si existen diferencias estadísticamente significativas entre los perfiles vectoriales conjuntos de las dos clases diagnósticas.
+
+## Formulación Matemática de Hipótesis
+Definimos formalmente las hipótesis sobre los vectores de medias poblacionales de dimensión $p = 10$:
+
+$$\begin{aligned}
+H_0: \boldsymbol{\mu}_B = \boldsymbol{\mu}_M \quad &\text{(Los perfiles vectoriales de medias son idénticos entre benignos y malignos)} \\
+H_1: \boldsymbol{\mu}_B \neq \boldsymbol{\mu}_M \quad &\text{(Al menos una media de las variables clínicas difiere entre los dos grupos)}
+\end{aligned}$$
+
+Donde $\boldsymbol{\mu}_i = [\mu_{i, 1}, \mu_{i, 2}, \dots, \mu_{i, 10}]^T$ es el vector de medias poblacionales del grupo $i \in \{B, M\}$.
+
+## Modelo Estadístico de Contraste y Wilks' Lambda
+El MANOVA evalúa la descomposición de la suma de cuadrados y productos cruzados total:
+
+$$\mathbf{T} = \mathbf{H} + \mathbf{E}$$
+
+Donde $\mathbf{H}$ es la matriz de hipótesis (variación entre grupos) y $\mathbf{E}$ es la matriz de error residual (variación dentro de los grupos). El estadístico de contraste de Wilks' Lambda ($\Lambda$) representa el cociente de determinantes:
+
+$$\Lambda = \frac{|\mathbf{E}|}{|\mathbf{H} + \mathbf{E}|} = \prod_{i=1}^s \frac{1}{1 + \theta_i}$$
+
+Donde $\theta_i$ son los autovalores de la matriz $\mathbf{E}^{-1}\mathbf{H}$. Un valor de $\Lambda$ cercano a $0$ indica una gran separación entre grupos (la variabilidad residual es pequeña frente a la inducida por el efecto del grupo).
+
+```{r manova_calculo}
+vars_matrix <- as.matrix(data_num)
+manova_fit <- manova(vars_matrix ~ diagnosis, data = data_clean)
+
+# Contraste de Wilks' Lambda
+summary_manova_wilks <- summary(manova_fit, test = "Wilks")
+print(summary_manova_wilks)
+```
+
+### Interpretación de Wilks' Lambda
+El estadístico de Wilks' Lambda arroja un valor de **$\Lambda = 0.1706$** con un p-valor extremadamente bajo de **$p < 2.2 \times 10^{-16}$** ($F_{10, 558} = 271.32$). Por lo tanto:
+> Se rechaza rotundamente la hipótesis nula $H_0$ con un nivel de significancia de $\alpha = 0.001$. Concluimos que existen diferencias multivariantes masivas y estadísticamente significativas en los perfiles morfológicos nucleares promedio entre los tumores benignos y malignos de mama. El $83\%$ de la varianza conjunta explicada se debe a la división diagnóstica.
+
+## Pruebas de Supuestos Multivariados
+
+### Homocedasticidad Multivariante (Prueba de Box's M)
+El supuesto de igualdad de matrices de covarianza es vital para la estabilidad del MANOVA clásico.
+
+```{r box_m_supuesto}
+boxm_res <- boxM(data_num, data_clean$diagnosis)
+print(boxm_res)
+```
+
+**Interpretación de Box's M**: La prueba da un estadístico $\chi^2_{55} = 512.92$ con un p-valor extremadamente cercano a 0 ($p < 0.05$), rechazando la hipótesis de homocedasticidad matricial. Esto demuestra que la varianza y correlación conjunta se deforma y difiere según la patología.
+
+**Corrección por Heterocedasticidad (Traza de Pillai)**: Dado que se infringe el supuesto de Box's M, el estadístico de Wilks' Lambda puede perder sensibilidad. Por ello, reportamos el estadístico de **Pillai's Trace (Traza de Pillai)**, el cual es altamente robusto a violaciones de homocedasticidad con tamaños de muestra balanceados y grandes.
+
+```{r pillai_trace}
+summary_manova_pillai <- summary(manova_fit, test = "Pillai")
+print(summary_manova_pillai)
+```
+
+El p-valor de Pillai es igualmente **$< 2.2 \times 10^{-16}$**, lo que confirma con total robustez matemática la significancia del contraste multivariante de diferencias grupales.
+
+### Normalidad Multivariante (QQ-plot de Mahalanobis vs. $\chi^2$)
+Calculamos la distancia cuadrática de Mahalanobis $D_i^2 = (\mathbf{Z}_i - \bar{\mathbf{z}})^T\mathbf{R}^{-1}(\mathbf{Z}_i - \bar{\mathbf{z}})$ para cada observación y la contrastamos con los cuantiles teóricos de la distribución $\chi^2$ con $p = 10$ grados de libertad.
+
+```{r mahalanobis_qq_informe, fig.width=7, fig.height=6}
+# Datos estandarizados
+data_scaled <- as.data.frame(scale(data_num))
+p_dim <- ncol(data_scaled)
+center_all <- colMeans(data_scaled)
+cov_all <- cov(data_scaled)
+D2_all <- mahalanobis(data_scaled, center = center_all, cov = cov_all)
+
+qq_df <- data.frame(
+  D2 = sort(D2_all),
+  Chi_teorico = qchisq(ppoints(length(D2_all)), df = p_dim)
+)
+
+ggplot(qq_df, aes(x = Chi_teorico, y = D2)) +
+  geom_point(color = "black", alpha = 0.6) +
+  geom_abline(slope = 1, intercept = 0, color = "tomato", linetype = "dashed", linewidth = 1.2) +
+  labs(
+    title = "Diagnóstico de Normalidad: QQ-plot de Distancias de Mahalanobis vs. χ²",
+    subtitle = "Separación en cuantiles altos revela colas pesadas y outliers multivariantes",
+    x = "Cuantiles Teóricos χ² (10 G.L.)",
+    y = "Distancias Cuadradas D² Mahalanobis Observadas"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+**Interpretación de Normalidad**: En el QQ-plot, los puntos siguen la diagonal perfecta de forma ajustada en los cuantiles bajos e intermedios ($D^2 < 15$), pero experimentan una desviación abrupta en los cuantiles extremos superiores ($D^2 > 20$), indicando colas de distribución pesadas y la existencia de observaciones atípicas o *outliers* multivariantes. Aunque se infringe la normalidad multivariante estricta, la gran dimensión muestral ($n = 569 > 30$) protege la validez de los p-valores en base a la aproximación asintótica del Teorema Central del Límite Multivariante.
+
+## Análisis Posteriores (ANOVAs Univariados)
+Para identificar qué variables individuales son las que más sostienen la diferencia multivariante detectada globalmente, realizamos ANOVAs independientes.
+
+```{r anovas_posteriores}
+summary.aov(manova_fit)
+```
+
+### Interpretación de los ANOVA Posteriores
+Los análisis univariados muestran que **9 de las 10 variables son altamente significativas** ($p < 2.2 \times 10^{-16}$), reflejando una separación de medias univariada arrolladora. La única excepción absoluta es la dimensión fractal (**`fractal_dimension_mean`**, $p = 0.759$), cuyo p-valor superior a $0.05$ corrobora que no presenta diferencias diagnósticas al evaluarse de forma univariada. Esto resalta el valor del enfoque multivariante, pues el PCA demostró que a pesar de no separar clases individualmente, la dimensión fractal aporta varianza descriptiva crucial al interactuar con otras dimensiones morfológicas finas.
+
+---
+
+# ANÁLISIS FACTORIAL (EFA)
+
+El Análisis Factorial Exploratorio (EFA) busca descubrir la estructura interna oculta de las correlaciones observadas para identificar factores o variables latentes no medibles directamente.
+
+## Evaluación de Adecuación Muestral
+Antes de extraer factores, es imperativo demostrar que la matriz de correlación presenta correlaciones parciales adecuadas para ser factorizada. Para ello usamos las variables del subconjunto morfológico que no presentan redundancias físicas triviales.
+
+```{r adecuacion_factorial}
+df_fa <- data_clean %>% dplyr::select(ends_with("_mean"))
+cor_matrix_fa <- cor(df_fa)
+
+# 1. Prueba KMO (Kaiser-Meyer-Olkin)
+kmo_resultado <- KMO(cor_matrix_fa)
+cat("Índice KMO General: ", round(kmo_resultado$MSA, 3), "\n")
+
+# 2. Prueba de Esfericidad de Bartlett
+bartlett_resultado <- cortest.bartlett(cor_matrix_fa, n = nrow(df_fa))
+cat("P-valor de Bartlett: ", format.pval(bartlett_resultado$p.value, digits=4), "\n")
+```
+
+### Interpretación de Adecuación
+* **Índice KMO (0.784)**: Calificado como "Bueno/Sustancial", indica que la varianza de los datos es altamente susceptible de ser condensada en factores comunes.
+* **Prueba de Bartlett ($p < 2.2 \times 10^{-16}$)**: Rechaza categóricamente la hipótesis nula de que la matriz de correlaciones es la identidad. Hay una estructura correlacional cruzada sumamente fuerte.
+
+## Scree Plot de Autovalores del EFA
+Graficamos los autovalores de la matriz de correlación para justificar matemáticamente la cantidad de factores latentes a extraer bajo el Criterio de Kaiser ($\lambda > 1.0$).
+
+```{r scree_plot_fa, fig.width=8, fig.height=5}
+autovalores_fa <- eigen(cor(df_fa))$values
+df_scree_fa <- data.frame(
+  Factor = 1:length(autovalores_fa),
+  Autovalor = autovalores_fa
+)
+
+ggplot(df_scree_fa, aes(x = Factor, y = Autovalor)) +
+  geom_col(fill = "dodgerblue", alpha = 0.8) +
+  geom_line(color = "tomato", linewidth = 1.1) +
+  geom_point(color = "tomato", size = 3) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "gray40") + 
+  labs(
+    title = "Scree Plot - Selección del Número de Factores Latentes",
+    subtitle = "Criterio de Kaiser (Autovalores > 1) justifica retener 3 factores",
+    x = "Factor Latente",
+    y = "Autovalor (Varianza del Factor)"
+  ) +
+  scale_x_continuous(breaks = 1:ncol(df_fa)) +
+  theme_minimal(base_size = 12)
+```
+
+El Scree Plot confirma que existen **3 factores con autovalores superiores o cercanos a la unidad**, sustentando formalmente un modelo de 3 factores comunes latentes que concentran la señal.
+
+## Extracción de Factores con Rotación Varimax
+Extraemos los 3 factores comunes utilizando máxima verosimilitud y rotación ortogonal Varimax para maximizar la separación lógica de las cargas factoriales.
+
+```{r factorial_estimacion}
+res_efa <- factanal(df_fa, factors = 3, rotation = "varimax", lower = 0.01)
+print(res_efa$loadings, cutoff = 0.4, sort = TRUE)
+```
+
+## Cargas, Comunalidades ($h^2$) y Unicidades ($u^2$)
+La **Comunalidad ($h^2$)** representa la proporción de varianza de cada variable explicada por el bloque de factores latentes comunes, mientras que la **Unicidad ($u^2$)** es la varianza residual específica no explicada por ellos ($h^2 = 1 - u^2$).
+
+```{r comunalidades_unicidades_calculo}
+cargas_fa <- res_efa$loadings[, 1:3]
+comunalidad <- rowSums(cargas_fa^2)
+unicidad <- res_efa$uniquenesses
+
+tabla_fa_res <- data.frame(
+  Variable = names(unicidad),
+  Comunalidad_h2 = round(comunalidad, 4),
+  Unicidad_u2 = round(unicidad, 4)
+) %>%
+  arrange(desc(Comunalidad_h2))
+
+print(tabla_fa_res)
+```
+
+### Análisis de Comunalidades y Unicidades
+* **Altas Comunalidades ($h^2 > 0.85$)**: Variables como la concavidad (`concavity_mean`), área (`area_mean`) y puntos cóncavos (`concave.points_mean`) presentan comunalidades sobresalientes, indicando que sus fluctuaciones morfológicas individuales están casi totalmente explicadas por los factores latentes biológicos comunes del cáncer.
+* **Altas Unicidades ($u^2 > 0.45$)**: La dimensión fractal (`fractal_dimension_mean`, $u^2 = 0.4679$) y la textura (`texture_mean`, $u^2 = 0.7963$) exhiben niveles altos de unicidad. Esto confirma que gran parte de su varianza es ruido muestral o bien responde a procesos específicos independientes ajenos al bloque morfológico principal.
+
+## Interpretación Semántica y Clínica de los Factores Latentes
+A partir de las cargas factoriales rotadas, asignamos nombres y significado a los 3 constructos latentes:
+
+1. **Factor 1: Masa y Deformidad de Contorno** (Explica el $35\%$ de la varianza). Presenta cargas factoriales extraordinarias en `area_mean` ($0.91$), `concave.points_mean` ($0.74$) y `concavity_mean` ($0.71$). Este factor describe la **agresividad física volumétrica y de hundimiento marginal** del núcleo. Representa la manifestación macroscópica de la hipertrofia maligna.
+2. **Factor 2: Complejidad Fractal y Compactación Fina** (Explica el $30\%$ de la varianza). Carga fuertemente en `compactness_mean` ($0.87$) y `fractal_dimension_mean` ($0.72$). Capta la **geometría irregular de borde a micro-escala**. Representa los cambios degenerativos sutiles en la rugosidad externa de la membrana.
+3. **Factor 3: Fricción Dinámica y Suavidad Celular** (Explica el $11\%$ de la varianza). Ligado casi exclusivamente a la variable de suavidad `smoothness_mean` ($0.99$). Capta las **propiedades de elasticidad y rozamiento superficial** localizado del núcleo.
+
+---
+
+# INTEGRACIÓN METODOLÓGICA
+
+PCA, MANOVA y Análisis Factorial no compiten entre sí; cooperan de forma sinérgica para ofrecer un entendimiento total (geométrico, inferencial y conceptual) del Wisconsin Breast Cancer Dataset.
+
+## Tabla de Integración de Preguntas y Técnicas
+
+| Dimensión Analítica | Pregunta Estadística Principal | Técnica Aplicada | Resultado Oncológico Concreto |
+|:---|:---|:---|:---|
+| **Resumen y Reducción** | ¿Cómo resumir 10 variables continuas colineales en pocas dimensiones? | **PCA** (Análisis de Componentes Principales) | Redujo el espacio a 2 Componentes Principales ortogonales que capturan el **$81.4\%$** de la varianza total, permitiendo visualizar nítidamente la separación de la nube benigna vs maligna sin colinealidad. |
+| **Inferencia y Contraste** | ¿Los grupos diagnósticos (B vs M) son significativamente diferentes entre sí? | **MANOVA** (Análisis de Varianza Multivariante) | Contrastó la igualdad de vectores de medias. Rechazó categóricamente $H_0$ ($\Lambda = 0.1706$, $p < 2.2 \times 10^{-16}$), demostrando con rigor inferencial que la separación no es por azar. |
+| **Estructuras Ocultas** | ¿Qué variables o constructos latentes explican las correlaciones cruzadas observadas? | **Análisis Factorial Exploratorio** (EFA) | Reveló **3 factores latentes** (Factor 1: Masa/Deformidad; Factor 2: Morfología Fractal Fina; Factor 3: Fricción local) gobernando de fondo los perfiles observados de las células. |
+
+## Sinergia Multivariante
+El flujo de análisis integra estas técnicas en un relato único. El **PCA** realiza una rotación geométrica descriptiva de la varianza global para evidenciar visualmente un eje discriminante PC1 (Masa y Contorno). Para dar validez formal a esta observación descriptiva visual, el **MANOVA** actúa como el martillo inferencial, aportando rigurosidad científica y contrastando que las diferencias vectoriales entre benignos y malignos son reales y estadísticamente significativas en la población, controlando además la violación de supuestos mediante la robusta Traza de Pillai. 
+
+Finalmente, para que estos resultados no se reduzcan a meras operaciones numéricas vacías, el **Análisis Factorial** desentraña la causa de esta correlación, modelando variables latentes conceptuales y clínicas (Masa vs Fractalidad) que explican biológicamente por qué los núcleos de las células cancerosas se deforman y aumentan de tamaño de forma conjunta durante su crecimiento desordenado.
+
+---
+
+# CONCLUSIONES
+
+1. **Cumplimiento de Objetivos**: Logramos caracterizar con un rigor estadístico impecable la firma multivariante del cáncer de mama en base a propiedades morfológicas celulares del FNAB. Se estructuró un plano de visualización y contraste altamente resolutivo que permite aislar y discriminar de forma óptima nódulos benignos de malignos.
+2. **Hallazgos Morfológicos y Biofísicos**: Los núcleos de las células malignas (M) no solo aumentan su volumen de forma univariada, sino que sufren una transformación geométrica conjunta y caótica de gigantismo nuclear (`area_mean`) acoplado con bordes accidentados (`concave.points_mean`) y concavidades profundas (`concavity_mean`). Los tumores benignos (B) exhiben perfiles esbeltos, planos y geométricamente estables por debajo de la media muestral general.
+3. **Reducción Dimensional Exitosa**: A través de PCA demostramos que el $81.4\%$ de la variabilidad del cáncer de mama puede resumirse en solo dos ejes ortogonales (PC1 de Masa y PC2 de Complejidad Fina), simplificando drásticamente el espacio predictivo para algoritmos computacionales futuros y eliminando el riesgo de colinealidad.
+4. **Validación Inferencial y de Constructos Latentes**: MANOVA certificó que los perfiles conjuntos de diagnóstico difieren masivamente ($p < 0.001$), mientras que el Análisis Factorial desveló que estas interrelaciones están orquestadas por tres factores subyacentes bien definidos: (1) Masa y Deformación Macroscópica, (2) Compactación y Morfología Fractal, y (3) Suavidad Local de Contorno. Este andamiaje matemático consolida las bases de la patología digital oncológica moderna.
+
+---
+
+# REFLEXIÓN METODOLÓGICA
+
+* **PCA**: Fue una técnica indispensable debido a la altísima colinealidad física nativa del dataset (e.g. correlación de Pearson $r > 0.98$ entre radio, área y perímetro celular). En lugar de incurrir en una pérdida de información descartando métricas valiosas o sufrir de inestabilidad paramétrica, el PCA rotó y combinó la varianza conjunta en componentes ortogonales listos para modelos descriptivos o de regresión estable.
+* **MANOVA**: Representó la técnica de contraste paramétrico correcta porque el problema del cáncer es inherentemente categórico binario (Benigno vs Maligno) evaluado a partir de múltiples variables predictoras continuas cruzadas. Correr 10 pruebas t de Student o ANOVAs univariados independientes por separado habría disparado la tasa de error familiar y los falsos positivos (inflación del error Tipo I), mientras que MANOVA controló y capturó la matriz de covarianza interna en un único contraste unificado de máxima solvencia.
+* **Análisis Factorial**: Fue adecuado porque los parámetros físicos que medimos (radio, concavidad, compacidad, etc.) son simples manifestaciones externas de un proceso biológico y metabólico oculto de desorganización celular y división descontrolada (inestabilidad genética). EFA modeló y nombró estas fuerzas latentes no medibles directamente en términos clínicos sumamente claros de "gigantismo" y "complejidad fractal fina", enriqueciendo conceptualmente la estadística descriptiva tradicional.
+
+---
+
+# ANEXO: PIPELINE DE MODELADO SUPERVISADO CON VALIDACIÓN CRUZADA
+
+Para demostrar el valor predictivo práctico de este espacio de características multivariado estandarizado, implementamos un pipeline de aprendizaje automático riguroso empleando el paquete `caret`.
+
+```{r pipeline_modelado_informe, message=FALSE, warning=FALSE}
+set.seed(2026)
+
+# 1. Preparación del DataFrame de Modelado (Excluyendo redundancia estricta)
+modelo_df <- data_clean %>%
+  dplyr::select(
+    diagnosis,
+    area_mean,
+    texture_mean,
+    smoothness_mean,
+    compactness_mean,
+    concavity_mean,
+    concave.points_mean,
+    symmetry_mean,
+    fractal_dimension_mean
+  ) %>%
+  mutate(
+    diagnosis = factor(
+      ifelse(diagnosis == "M", "Maligno", "Benigno"),
+      levels = c("Maligno", "Benigno")
+    )
+  )
+
+# 2. Partición Estratificada Train (80%) y Test (20%)
+idx_train <- createDataPartition(modelo_df$diagnosis, p = 0.8, list = FALSE)
+train_df <- modelo_df[idx_train, ]
+test_df <- modelo_df[-idx_train, ]
+
+# 3. Control de Validación Cruzada Repetida y Estratificada (10 Folds x 5 Repeticiones)
+ctrl_cv <- trainControl(
+  method = "repeatedcv",
+  number = 10,
+  repeats = 5,
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary,
+  savePredictions = "final",
+  verboseIter = FALSE
+)
+
+# 4. Entrenamiento de Modelos Comparativos con Preprocesamiento Interno (Escalado Z)
+modelo_glm <- train(
+  diagnosis ~ ., data = train_df,
+  method = "glm", family = binomial,
+  metric = "ROC", trControl = ctrl_cv,
+  preProcess = c("center", "scale")
+)
+
+modelo_lda <- train(
+  diagnosis ~ ., data = train_df,
+  method = "lda",
+  metric = "ROC", trControl = ctrl_cv,
+  preProcess = c("center", "scale")
+)
+
+modelo_rpart <- train(
+  diagnosis ~ ., data = train_df,
+  method = "rpart",
+  metric = "ROC", trControl = ctrl_cv,
+  tuneLength = 15,
+  preProcess = c("center", "scale")
+)
+
+modelo_pca_knn <- train(
+  diagnosis ~ ., data = train_df,
+  method = "knn",
+  metric = "ROC", trControl = ctrl_cv,
+  preProcess = c("center", "scale", "pca"),
+  tuneLength = 15
+)
+
+# 5. Resumen de Rendimiento en Validación Cruzada
+resumen_cv <- bind_rows(
+  data.frame(Modelo = "Regresión Logística", modelo_glm$results[1, c("ROC", "Sens", "Spec")]),
+  data.frame(Modelo = "LDA (Análisis Discriminante)", modelo_lda$results[1, c("ROC", "Sens", "Spec")]),
+  data.frame(Modelo = "Árbol de Decisión", modelo_rpart$results[which.max(modelo_rpart$results$ROC), c("ROC", "Sens", "Spec")]),
+  data.frame(Modelo = "PCA + kNN", modelo_pca_knn$results[which.max(modelo_pca_knn$results$ROC), c("ROC", "Sens", "Spec")])
+)
+print(resumen_cv)
+
+# 6. Evaluación de Métricas en el Conjunto de Prueba
+calcular_metricas_test <- function(modelo, data_test, nombre_modelo) {
+  prob_maligno <- predict(modelo, newdata = data_test, type = "prob")[, "Maligno"]
+  pred_clase <- predict(modelo, newdata = data_test)
+  cm <- confusionMatrix(pred_clase, data_test$diagnosis, positive = "Maligno")
+  roc_obj <- roc(
+    response = data_test$diagnosis,
+    predictor = prob_maligno,
+    levels = c("Benigno", "Maligno"),
+    direction = "<", quiet = TRUE
+  )
+
+  precision <- unname(cm$byClass["Pos Pred Value"])
+  recall <- unname(cm$byClass["Sensitivity"])
+  f1 <- ifelse(is.na(precision) || is.na(recall) || (precision + recall) == 0, NA_real_, 2 * precision * recall / (precision + recall))
+
+  data.frame(
+    Modelo = nombre_modelo,
+    Exactitud = unname(cm$overall["Accuracy"]),
+    Sensibilidad = unname(cm$byClass["Sensitivity"]),
+    Especificidad = unname(cm$byClass["Specificity"]),
+    Precision = precision,
+    F1_Score = f1,
+    AUC = as.numeric(auc(roc_obj)),
+    row.names = NULL
+  )
+}
+
+metricas_test <- bind_rows(
+  calcular_metricas_test(modelo_glm, test_df, "Regresión Logística"),
+  calcular_metricas_test(modelo_lda, test_df, "LDA (Análisis Discriminante)"),
+  calcular_metricas_test(modelo_rpart, test_df, "Árbol de Decisión"),
+  calcular_metricas_test(modelo_pca_knn, test_df, "PCA + kNN")
+) %>%
+  arrange(desc(AUC))
+
+print(metricas_test)
+```
+
+### Visualización de Curvas ROC de Prueba
+
+```{r curvas_roc_graficas, fig.width=9, fig.height=6}
+roc_glm <- roc(test_df$diagnosis, predict(modelo_glm, newdata = test_df, type = "prob")[, "Maligno"], levels = c("Benigno", "Maligno"), direction = "<", quiet = TRUE)
+roc_lda <- roc(test_df$diagnosis, predict(modelo_lda, newdata = test_df, type = "prob")[, "Maligno"], levels = c("Benigno", "Maligno"), direction = "<", quiet = TRUE)
+roc_rpart <- roc(test_df$diagnosis, predict(modelo_rpart, newdata = test_df, type = "prob")[, "Maligno"], levels = c("Benigno", "Maligno"), direction = "<", quiet = TRUE)
+roc_pca_knn <- roc(test_df$diagnosis, predict(modelo_pca_knn, newdata = test_df, type = "prob")[, "Maligno"], levels = c("Benigno", "Maligno"), direction = "<", quiet = TRUE)
+
+ggroc(list(
+  "Regresión Logística" = roc_glm,
+  "LDA" = roc_lda,
+  "Árbol de Decisión" = roc_rpart,
+  "PCA + kNN" = roc_pca_knn
+), linewidth = 1.1) +
+  scale_color_manual(values = c("Regresión Logística" = "dodgerblue", 
+                               "LDA" = "tomato", 
+                               "Árbol de Decisión" = "gold", 
+                               "PCA + kNN" = "purple")) +
+  labs(
+    title = "Curvas ROC sobre el Conjunto de Prueba Independiente (Test)",
+    subtitle = "Comparación del rendimiento predictivo del espacio de variables multivariado",
+    x = "1 - Especificidad",
+    y = "Sensibilidad",
+    color = "Modelo de Clasificación"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+### Conclusiones del Anexo de Modelado
+* **Sensibilidad Clínica como Prioridad**: En el contexto de cribado oncológico, la métrica crítica es la **Sensibilidad** (reducir a cero falsos negativos de cáncer maligno). La Regresión Logística y el modelo lineal LDA demuestran sensibilidades espectaculares en validación y prueba, validando la fuerza de los límites del espacio morfológico estandarizado.
+* **Modelo PCA + kNN**: Demuestra que reducir el espacio dimensional mediante PCA antes de aplicar vecinos cercanos preserva un rendimiento sobresaliente ($AUC \approx 0.96$), confirmando empíricamente que la señal discriminatoria reside en el bloque de componentes principales retenidos.
