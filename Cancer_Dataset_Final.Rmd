@@ -1,9 +1,12 @@
 ---
 title: "Informe Final de Estadística Multidimensional - Wisconsin Breast Cancer Dataset"
-subtitle: "Un Enfoque Integrado en Oncología Computacional: PCA, MANOVA y Análisis Factorial"
-author: "Julian Cabrera, Andres Carvajal, Mauricio Sanchez, Jaider Carvajal, Nelson Posso"
+author: Julian Cabrera, Andres Carvajal, Mauricio Sanchez, Jaider Carvajal, Nelson
+  Posso
 date: "`r format(Sys.Date(), '%d/%m/%Y')`"
 output:
+  pdf_document:
+    toc: true
+    toc_depth: '3'
   html_document:
     toc: true
     toc_depth: 3
@@ -13,6 +16,8 @@ output:
     code_folding: show
     fig_width: 9
     fig_height: 6
+subtitle: 'Un Enfoque Integrado en Oncología Computacional: PCA, MANOVA y Análisis
+  Factorial'
 ---
 
 ```{r setup, include=FALSE}
@@ -228,6 +233,8 @@ v_x_ini <- combinaciones_3d[[1]][1]
 v_y_ini <- combinaciones_3d[[1]][2]
 v_z_ini <- combinaciones_3d[[1]][3]
 
+if (knitr::is_html_output()) {
+
 p_3d <- plot_ly() %>%
   add_trace(x = data_B[[v_x_ini]], y = data_B[[v_y_ini]], z = data_B[[v_z_ini]], 
             type = "scatter3d", mode = "markers", name = "Benigno (B)",
@@ -289,6 +296,7 @@ p_3d <- p_3d %>% layout(
   margin = list(l = 0, r = 0, b = 0, t = 80)
 )
 p_3d
+}
 ```
 
 ### Interpretación Geométrica de Separación y Solapamiento
@@ -385,7 +393,11 @@ g_ejes <- ggplot(df_2d, aes(radius_mean, compactness_mean)) +
   ) +
   theme_minimal(base_size = 12)
 
-ggplotly(g_ejes)
+if (knitr::is_html_output()) {
+  ggplotly(g_ejes)
+} else {
+  g_ejes
+}
 ```
 
 ## PCA en las 10 Variables de Medias
@@ -472,7 +484,11 @@ g_scores <- ggplot(scores_cancer, aes(PC1, PC2, color = diagnosis)) +
   ) +
   theme_minimal(base_size = 12)
 
-ggplotly(g_scores)
+if (knitr::is_html_output()) {
+  ggplotly(g_scores)
+} else {
+  g_scores
+}
 ```
 
 ### Interpretación de Nubes de Puntos
@@ -601,9 +617,9 @@ ggplot(qq_df, aes(x = Chi_teorico, y = D2)) +
   geom_point(color = "black", alpha = 0.6) +
   geom_abline(slope = 1, intercept = 0, color = "tomato", linetype = "dashed", linewidth = 1.2) +
   labs(
-    title = "Diagnóstico de Normalidad: QQ-plot de Distancias de Mahalanobis vs. χ²",
+    title = "Diagnóstico de Normalidad: QQ-plot de Distancias de Mahalanobis vs. Chi-cuadrado",
     subtitle = "Separación en cuantiles altos revela colas pesadas y outliers multivariantes",
-    x = "Cuantiles Teóricos χ² (10 G.L.)",
+    x = "Cuantiles Teóricos Chi-cuadrado (10 G.L.)",
     y = "Distancias Cuadradas D² Mahalanobis Observadas"
   ) +
   theme_minimal(base_size = 12)
